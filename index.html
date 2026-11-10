@@ -288,9 +288,24 @@
 
 <body>
 
+    <div id="telaLogin" style="max-width:400px;margin:100px auto;background:white;padding:20px;border-radius:10px;box-shadow:0 0 10px #ccc;">
+        <h2>🔒 Acesso ao Sistema</h2>
+        <input type="email" id="emailLogin" placeholder="E-mail" autocomplete="username" required>
+        <input type="password" id="senhaLogin" placeholder="Senha" autocomplete="current-password" required>
+        <button type="button" onclick="fazerLogin()" style="background:#0d6efd;color:white;width:100%;margin-top:10px;">
+            Entrar
+        </button>
+        <p id="erroLogin" role="alert" style="color:#dc3545;" hidden></p>
+    </div>
+
+    <div id="sistema" style="display:none;">
+
     <header class="cabecalho-sistema">
         <img class="logo-sistema" src="logo-viaturas-fundo-transparente.png" alt="Logotipo do sistema de controle de viaturas">
         <h1>Sistema de Controle de Viaturas 🚔</h1>
+        <button type="button" onclick="sair()" style="margin-left:auto;background:#dc3545;color:white;border:none;padding:10px 15px;border-radius:5px;cursor:pointer;">
+            Sair
+        </button>
     </header>
 
     <div class="dashboard">
@@ -524,6 +539,50 @@
             supabaseKey
         );
         console.log("Supabase carregado!");
+
+        async function fazerLogin() {
+            const email = document.getElementById("emailLogin").value.trim();
+            const senha = document.getElementById("senhaLogin").value;
+            const mensagemErro = document.getElementById("erroLogin");
+            const botao = document.querySelector("#telaLogin button");
+
+            mensagemErro.hidden = true;
+            botao.disabled = true;
+            botao.innerText = "Entrando...";
+
+            try {
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+                if (error) throw error;
+                await mostrarSistema();
+            } catch (erro) {
+                mensagemErro.innerText = erro.message || "Não foi possível entrar.";
+                mensagemErro.hidden = false;
+            } finally {
+                botao.disabled = false;
+                botao.innerText = "Entrar";
+            }
+        }
+
+        async function sair() {
+            try {
+                const { error } = await supabaseClient.auth.signOut();
+                if (error) throw error;
+            } catch (erro) {
+                console.error("Erro ao encerrar a sessão:", erro);
+            } finally {
+                localStorage.removeItem("usuarioLogado");
+                document.getElementById("sistema").style.display = "none";
+                document.getElementById("telaLogin").style.display = "block";
+                document.getElementById("senhaLogin").value = "";
+            }
+        }
+
+        async function mostrarSistema() {
+            document.getElementById("telaLogin").style.display = "none";
+            document.getElementById("sistema").style.display = "block";
+            localStorage.setItem("usuarioLogado", "sim");
+            await iniciarAplicacao();
+        }
 
         let viaturas = [];
         let viaturasPersistidas = [];
@@ -1610,7 +1669,32 @@
             atualizarTabela();
         }
 
-        iniciarAplicacao();
+        async function restaurarAcesso() {
+            const telaLogin = document.getElementById("telaLogin");
+            const sistema = document.getElementById("sistema");
+            telaLogin.style.display = "block";
+            sistema.style.display = "none";
+
+            try {
+                if (localStorage.getItem("usuarioLogado") !== "sim") return;
+
+                const { data, error } = await supabaseClient.auth.getSession();
+                if (error) throw error;
+                if (data.session) {
+                    await mostrarSistema();
+                } else {
+                    localStorage.removeItem("usuarioLogado");
+                }
+            } catch (erro) {
+                localStorage.removeItem("usuarioLogado");
+                const mensagemErro = document.getElementById("erroLogin");
+                mensagemErro.innerText = erro.message || "Não foi possível verificar a sessão.";
+                mensagemErro.hidden = false;
+            }
+        }
+
+        restaurarAcesso();
     </script>
+    </div>
 </body>
 </html>
