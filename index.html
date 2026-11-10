@@ -195,7 +195,17 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, .25);
         }
 
-        #historicoDialog::backdrop {
+        #dadosDialog {
+            width: min(600px, calc(100% - 32px));
+            max-height: 90vh;
+            border: none;
+            border-radius: 10px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .25);
+        }
+
+        #historicoDialog::backdrop,
+        #dadosDialog::backdrop {
             background: rgba(0, 0, 0, .5);
         }
 
@@ -528,6 +538,47 @@
         <div id="listaHistorico" class="historico-lista"></div>
     </dialog>
 
+    <dialog id="dadosDialog">
+        <div class="historico-cabecalho">
+            <h2 id="dadosTitulo">Dados da viatura</h2>
+            <button type="button" class="btn-fechar" onclick="fecharDados()">Fechar</button>
+        </div>
+        <form id="formDados" onsubmit="salvarDadosComplementares(event)">
+            <div class="grid">
+                <div>
+                    <label for="cartaoAbastecimento">Cartão de Abastecimento</label>
+                    <input type="text" id="cartaoAbastecimento">
+                </div>
+                <div>
+                    <label for="renavam">Renavam</label>
+                    <input type="text" id="renavam">
+                </div>
+                <div>
+                    <label for="chassi">Chassi</label>
+                    <input type="text" id="chassi">
+                </div>
+                <div>
+                    <label for="numeracaoPneu">Numeração do Pneu</label>
+                    <input type="text" id="numeracaoPneu">
+                </div>
+                <div>
+                    <label for="numeroMotor">Número do Motor</label>
+                    <input type="text" id="numeroMotor">
+                </div>
+                <div>
+                    <label for="patrimonio">Patrimônio</label>
+                    <input type="text" id="patrimonio">
+                </div>
+                <div>
+                    <label for="combustivel">Combustível</label>
+                    <input type="text" id="combustivel">
+                </div>
+            </div>
+            <button type="submit" class="btn-cadastrar">Salvar dados</button>
+            <button type="button" class="btn-fechar" onclick="fecharDados()">Cancelar</button>
+        </form>
+    </dialog>
+
     <script>
 
         // Conexão com Supabase
@@ -584,10 +635,85 @@
             await iniciarAplicacao();
         }
 
+        function mostrarDados(indice) {
+            const viatura = viaturas[indice];
+            if (!viatura) {
+                alert("Não foi possível encontrar esta viatura.");
+                return;
+            }
+
+            indiceDados = indice;
+            document.getElementById("dadosTitulo").innerText =
+                `Dados da viatura ${viatura.prefixo} / ${viatura.placa || "sem placa"}`;
+            document.getElementById("cartaoAbastecimento").value = viatura.cartao_abastecimento ?? viatura.cartaoAbastecimento ?? "";
+            document.getElementById("renavam").value = viatura.renavam || "";
+            document.getElementById("chassi").value = viatura.chassi || "";
+            document.getElementById("numeracaoPneu").value = viatura.numeracao_pneu ?? viatura.numeracaoPneu ?? "";
+            document.getElementById("numeroMotor").value = viatura.numero_motor ?? viatura.numeroMotor ?? "";
+            document.getElementById("patrimonio").value = viatura.patrimonio || "";
+            document.getElementById("combustivel").value = viatura.combustivel || "";
+            document.getElementById("dadosDialog").showModal();
+        }
+
+        function fecharDados() {
+            document.getElementById("dadosDialog").close();
+            indiceDados = -1;
+        }
+
+        async function salvarDadosComplementares(evento) {
+            evento.preventDefault();
+            const viatura = viaturas[indiceDados];
+            if (!viatura) {
+                alert("Não foi possível encontrar esta viatura.");
+                fecharDados();
+                return;
+            }
+
+            const dadosComplementares = {
+                cartao_abastecimento: document.getElementById("cartaoAbastecimento").value.trim(),
+                renavam: document.getElementById("renavam").value.trim(),
+                chassi: document.getElementById("chassi").value.trim(),
+                numeracao_pneu: document.getElementById("numeracaoPneu").value.trim(),
+                numero_motor: document.getElementById("numeroMotor").value.trim(),
+                patrimonio: document.getElementById("patrimonio").value.trim(),
+                combustivel: document.getElementById("combustivel").value.trim()
+            };
+
+            try {
+                const { error } = await supabaseClient
+                    .from("viaturas")
+                    .update(dadosComplementares)
+                    .eq("id", viatura.id);
+                if (error) throw error;
+
+                Object.assign(viatura, {
+                    cartaoAbastecimento: dadosComplementares.cartao_abastecimento,
+                    numeracaoPneu: dadosComplementares.numeracao_pneu,
+                    numeroMotor: dadosComplementares.numero_motor,
+                    renavam: dadosComplementares.renavam,
+                    chassi: dadosComplementares.chassi,
+                    patrimonio: dadosComplementares.patrimonio,
+                    combustivel: dadosComplementares.combustivel
+                });
+                const indicePersistido = viaturasPersistidas.findIndex(registro => registro.id === viatura.id);
+                if (indicePersistido >= 0) {
+                    viaturasPersistidas[indicePersistido] = { ...viaturasPersistidas[indicePersistido], ...viatura };
+                }
+            } catch (erro) {
+                console.error("Erro ao salvar dados complementares:", erro);
+                alert(`Erro ao salvar no Supabase: ${erro.message || erro}`);
+                return;
+            }
+
+            atualizarTabela();
+            fecharDados();
+        }
+
         let viaturas = [];
         let viaturasPersistidas = [];
         let supabaseDisponivel = false;
         let indiceEdicao = -1;
+        let indiceDados = -1;
         let indiceHistorico = -1;
         let indiceEdicaoHistorico = -1;
         let filtroAtual = "";
@@ -666,9 +792,18 @@
 
             try {
                 const dadosParaSalvar = viatura => {
-                    const { id, ...dados } = viatura;
+                    const {
+                        id,
+                        cartaoAbastecimento,
+                        numeracaoPneu,
+                        numeroMotor,
+                        ...dados
+                    } = viatura;
                     return {
                         ...dados,
+                        cartao_abastecimento: cartaoAbastecimento || null,
+                        numeracao_pneu: numeracaoPneu || null,
+                        numero_motor: numeroMotor || null,
                         ultimaRevisao: dados.ultimaRevisao || null,
                         trocaOleo: dados.trocaOleo || null
                     };
@@ -959,6 +1094,7 @@
 
                         <td>
                             <button class="btn-historico" onclick="abrirHistorico(${indice})">Histórico</button>
+                            <button type="button" class="btn-dados" onclick="mostrarDados(${indice})">Dados</button>
                             <button class="btn-editar" onclick="editar(${indice})">Editar</button>
                             <button class="btn-excluir" onclick="excluir(${indice})">Excluir</button>
                         </td>
@@ -1577,21 +1713,32 @@
             try {
                 const { data, error } = await supabaseClient
                     .from("viaturas")
-                    .select("id,prefixo,placa,marca,modelo,ano,emprego,observacao,km,status,kmUltimoAbastecimento,ultimaRevisao,trocaOleo,kmTrocaOleo,kmTrocaFiltroOleo,kmTrocaFiltroCombustivel,kmTrocaFiltroAr,historicoManutencao")
+                    .select("*")
                     .order("id");
                 if (error) throw error;
 
-                viaturas = data.map(viatura => ({
-                    ...viatura,
-                    prefixo: String(viatura.prefixo || "").toLocaleUpperCase("pt-BR"),
-                    placa: String(viatura.placa || "").toLocaleUpperCase("pt-BR"),
-                    marca: String(viatura.marca || "").toLocaleUpperCase("pt-BR"),
-                    modelo: String(viatura.modelo || "").toLocaleUpperCase("pt-BR"),
-                    emprego: String(viatura.emprego || "").toLocaleUpperCase("pt-BR"),
-                    historicoManutencao: Array.isArray(viatura.historicoManutencao)
-                        ? viatura.historicoManutencao
-                        : []
-                }));
+                viaturas = data.map(viatura => {
+                    const {
+                        cartao_abastecimento: cartaoAbastecimento,
+                        numeracao_pneu: numeracaoPneu,
+                        numero_motor: numeroMotor,
+                        ...campos
+                    } = viatura;
+                    return {
+                        ...campos,
+                        cartaoAbastecimento: cartaoAbastecimento || "",
+                        numeracaoPneu: numeracaoPneu || "",
+                        numeroMotor: numeroMotor || "",
+                        prefixo: String(viatura.prefixo || "").toLocaleUpperCase("pt-BR"),
+                        placa: String(viatura.placa || "").toLocaleUpperCase("pt-BR"),
+                        marca: String(viatura.marca || "").toLocaleUpperCase("pt-BR"),
+                        modelo: String(viatura.modelo || "").toLocaleUpperCase("pt-BR"),
+                        emprego: String(viatura.emprego || "").toLocaleUpperCase("pt-BR"),
+                        historicoManutencao: Array.isArray(viatura.historicoManutencao)
+                            ? viatura.historicoManutencao
+                            : []
+                    };
+                });
                 viaturasPersistidas = JSON.parse(JSON.stringify(viaturas));
                 supabaseDisponivel = true;
             } catch (erro) {
