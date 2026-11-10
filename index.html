@@ -1,0 +1,1616 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Controle de Viaturas</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            margin: 20px;
+            background: #f4f6f9;
+        }
+
+        h1 {
+            color: #003366;
+            margin: 0;
+        }
+
+        .cabecalho-sistema {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .logo-sistema {
+            display: block;
+            max-width: 96px;
+            max-height: 72px;
+            object-fit: contain;
+        }
+
+        .dashboard {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 220px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.1);
+        }
+
+        .card h3 {
+            margin: 0;
+            color: #555;
+        }
+
+        .card p {
+            font-size: 28px;
+            font-weight: bold;
+            color: #003366;
+            margin: 10px 0 0;
+        }
+
+        .formulario {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.1);
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .campo-obrigatorio-pendente {
+            border: 2px solid #dc3545;
+            background-color: #fff1f1;
+        }
+
+        .campo-obrigatorio-pendente:focus {
+            border-color: #dc3545;
+            box-shadow: 0 0 0 2px rgba(220, 53, 69, .2);
+        }
+
+        #prefixo,
+        #placa,
+        #marca,
+        #modelo,
+        #emprego {
+            text-transform: uppercase;
+        }
+       
+        label {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+            gap: 10px;
+        }
+
+        button {
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .pesquisa-container {
+            position: relative;
+            width: 100%;
+            margin: 20px 0;
+        }
+
+        #pesquisa {
+            width: 100%;
+            margin: 0;
+            padding: 12px 42px 12px 12px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
+        .btn-limpar-pesquisa {
+            position: absolute;
+            top: 50%;
+            right: 7px;
+            display: grid;
+            place-items: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            transform: translateY(-50%);
+            background: transparent;
+            color: #555;
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .btn-limpar-pesquisa:hover {
+            background: #eee;
+        }
+
+        .btn-limpar-pesquisa[hidden] {
+            display: none;
+        }
+
+        .btn-cadastrar {
+            background: #007bff;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-importar {
+            background: #198754;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-editar {
+            background: #ffc107;
+            color: black;
+        }
+
+        .btn-excluir {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-historico {
+            background: #0d6efd;
+            color: white;
+        }
+
+        #historicoDialog {
+            width: min(760px, calc(100% - 32px));
+            max-height: 90vh;
+            border: none;
+            border-radius: 10px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .25);
+        }
+
+        #historicoDialog::backdrop {
+            background: rgba(0, 0, 0, .5);
+        }
+
+        .historico-cabecalho {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .historico-cabecalho h2 {
+            margin-top: 0;
+            color: #003366;
+        }
+
+        .historico-formulario {
+            margin: 16px 0;
+            padding: 16px;
+            background: #f4f6f9;
+            border-radius: 8px;
+        }
+
+        .historico-lista {
+            max-height: 300px;
+            overflow: auto;
+        }
+
+        .historico-lista table {
+            min-width: 560px;
+        }
+
+        .btn-fechar {
+            background: #6c757d;
+            color: white;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th {
+            background: #003366;
+            color: white;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        th:last-child,
+        td:last-child {
+            min-width: 140px;
+            width: 10%;
+            text-align: left;
+            white-space: normal;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .status-disponivel {
+            color: green;
+            font-weight: bold;
+        }
+
+        .status-manutencao {
+            color: #ff8c00;
+            font-weight: bold;
+        }
+
+        .status-emprestada {
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        .status-baixada {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+    <header class="cabecalho-sistema">
+        <img class="logo-sistema" src="logo-viaturas-fundo-transparente.png" alt="Logotipo do sistema de controle de viaturas">
+        <h1>Sistema de Controle de Viaturas 🚔</h1>
+    </header>
+
+    <div class="dashboard">
+
+        <div class="card">
+            <h3>Total de Viaturas</h3>
+            <p id="totalViaturas">0</p>
+        </div>
+
+        <div class="card">
+            <h3>Disponíveis</h3>
+            <p id="totalDisponiveis">0</p>
+        </div>
+
+        <div class="card">
+            <h3>Em Manutenção</h3>
+            <p id="totalManutencao">0</p>
+        </div>
+
+        <div class="card">
+            <h3>Emprestadas</h3>
+            <p id="totalEmprestadas">0</p>
+        </div>
+
+        <div class="card">
+            <h3>Baixadas</h3>
+            <p id="totalBaixadas">0</p>
+        </div>
+
+    </div>
+
+    <div class="formulario">
+
+        <div class="grid">
+
+            <input type="text" id="prefixo" placeholder="Prefixo">
+
+            <input type="text" id="placa" placeholder="Placa">
+
+            <input type="text" id="marca" placeholder="Marca">
+
+            <input type="text" id="modelo" placeholder="Modelo">
+
+            <input type="text"
+                   id="ano"
+                   placeholder="Ano (ex.: 2019/2020)">
+
+            <input type="text" id="emprego" placeholder="Emprego">
+
+            <input type="number" id="km" placeholder="KM Atual">
+
+            <select id="status">
+                    <option value="">Selecione o Status</option>
+                    <option value="Disponível">Disponível</option>
+                    <option value="Manutenção">Manutenção</option>
+                    <option value="Emprestada">Emprestada</option>
+                    <option value="Baixada">Baixada</option>
+            </select>
+
+            <div>
+                <label for="ultimaRevisao">
+                    Data da Última Revisão/Manutenção
+                </label>
+                <input type="date" id="ultimaRevisao">
+            </div>
+
+<div>
+    <label for="trocaOleo">
+        Data da Próxima Troca de Óleo
+    </label>
+    <input type="date" id="trocaOleo">
+
+        </div>
+
+<div>
+    <label for="kmTrocaOleo">
+        KM da Próxima Troca de Óleo
+    </label>
+
+    <input
+        type="number"
+        id="kmTrocaOleo"
+        placeholder="Ex.: 85000"
+        min="0">
+
+</div>
+
+<div>
+    <label for="kmTrocaFiltroOleo">
+        KM da Próxima Troca de Filtro de Óleo
+    </label>
+
+    <input
+        type="number"
+        id="kmTrocaFiltroOleo"
+        placeholder="Ex.: 90000"
+        min="0">
+
+</div>
+
+<div>
+    <label for="kmTrocaFiltroCombustivel">
+        KM da Próxima Troca de Filtro de Combustível
+    </label>
+
+    <input
+        type="number"
+        id="kmTrocaFiltroCombustivel"
+        placeholder="Ex.: 95000"
+        min="0">
+
+</div>
+
+<div>
+    <label for="kmTrocaFiltroAr">
+        KM da Próxima Troca de Filtro de Ar
+    </label>
+
+    <input
+        type="number"
+        id="kmTrocaFiltroAr"
+        placeholder="Ex.: 100000"
+        min="0">
+
+</div>
+
+        <input type="text" id="observacao" placeholder="Observação">
+
+        <button class="btn-cadastrar" onclick="cadastrar()">
+            Cadastrar
+        </button>
+
+        <button class="btn-importar" onclick="importarViaturasPlanilha()">
+            Importar/atualizar viaturas da planilha
+        </button>
+
+        </div>
+
+        <div class="pesquisa-container">
+            <input
+                type="text"
+                id="pesquisa"
+                placeholder="🔎 Pesquisar Prefixo, Placa, Marca, Modelo ou Status"
+                oninput="filtrarTabela()">
+            <button
+                type="button"
+                id="btnLimparPesquisa"
+                class="btn-limpar-pesquisa"
+                aria-label="Limpar pesquisa"
+                title="Limpar pesquisa"
+                onclick="limparPesquisa()"
+                hidden>&times;</button>
+        </div>
+
+        <table>
+
+        <thead>
+            <tr>
+                <th>Prefixo</th>
+                <th>Placa</th>
+                <th>Marca</th>
+                <th>Modelo</th>
+                <th>Ano</th>
+                <th>Emprego</th>
+                <th>KM Atual</th>
+                <th>Status</th>
+                <th>Última Revisão<br>/Manutenção</th>
+                <th>Data da Próx. Troca de Óleo</th>
+                <th>KM da Próx. Troca de Óleo</th>
+                <th>KM da Próx. Troca de Filtro de Óleo</th>
+                <th>KM da Próx. Troca de Filtro de Combustível</th>
+                <th>KM da Próx. Troca de Filtro de Ar</th>
+                <th>Alertas</th>
+                <th>Ações</th>
+                <th>Observação</th>
+            </tr>
+        </thead>
+
+        <tbody id="listaViaturas"></tbody>
+
+    </table>
+
+    <dialog id="historicoDialog">
+        <div class="historico-cabecalho">
+            <h2 id="historicoTitulo">Histórico de manutenção</h2>
+            <button type="button" class="btn-fechar" onclick="fecharHistorico()">Fechar</button>
+        </div>
+
+        <div class="historico-formulario">
+            <h3 id="historicoFormTitulo">Registrar manutenção</h3>
+            <form id="formHistorico" onsubmit="registrarManutencao(event)">
+                <div class="grid">
+                    <div>
+                        <label for="dataManutencao">Data</label>
+                        <input type="date" id="dataManutencao" required>
+                    </div>
+                    <div>
+                        <label for="kmManutencao">KM da viatura</label>
+                        <input type="number" id="kmManutencao" min="0" placeholder="Ex.: 85000" required>
+                    </div>
+                    <div>
+                        <label for="oficinaManutencao">Oficina/Responsável</label>
+                        <input type="text" id="oficinaManutencao" placeholder="Opcional">
+                    </div>
+                    <div>
+                        <label for="valorManutencao">Valor (R$)</label>
+                        <input type="number" id="valorManutencao" min="0" step="0.01" placeholder="Opcional">
+                    </div>
+                </div>
+                <label for="descricaoManutencao">Serviço realizado</label>
+                <input type="text" id="descricaoManutencao" placeholder="Ex.: troca de óleo e filtros" required>
+                <button type="submit" class="btn-cadastrar">Salvar manutenção</button>
+                <button type="button" id="cancelarEdicaoManutencao" class="btn-fechar" onclick="cancelarEdicaoManutencao()" hidden>
+                    Cancelar edição
+                </button>
+            </form>
+        </div>
+
+        <h3>Registros anteriores</h3>
+        <div id="listaHistorico" class="historico-lista"></div>
+    </dialog>
+
+    <script>
+
+        // Conexão com Supabase
+        const supabaseUrl = "https://jxtivpcduhomnnqpukaj.supabase.co";
+        const supabaseKey = "sb_publishable_lJTNW-tGjLGPEZdkqY3q6w_R2OqNerz";
+
+        const supabaseClient = supabase.createClient(
+            supabaseUrl,
+            supabaseKey
+        );
+        console.log("Supabase carregado!");
+
+        let viaturas = [];
+        let viaturasPersistidas = [];
+        let supabaseDisponivel = false;
+        let indiceEdicao = -1;
+        let indiceHistorico = -1;
+        let indiceEdicaoHistorico = -1;
+        let filtroAtual = "";
+        const urlPlanilha = "https://docs.google.com/spreadsheets/d/1Bm-V_pZgZhPNcfcZCGwCnFp_qCWmUdIa/export?format=csv&gid=1764078484";
+
+        function parsearCSV(texto) {
+            const linhas = [];
+            let linha = [];
+            let campo = "";
+            let entreAspas = false;
+
+            for (let i = 0; i < texto.length; i++) {
+                const caractere = texto[i];
+
+                if (caractere === '"') {
+                    if (entreAspas && texto[i + 1] === '"') {
+                        campo += '"';
+                        i++;
+                    } else {
+                        entreAspas = !entreAspas;
+                    }
+                } else if (caractere === "," && !entreAspas) {
+                    linha.push(campo.trim());
+                    campo = "";
+                } else if ((caractere === "\n" || caractere === "\r") && !entreAspas) {
+                    if (caractere === "\r" && texto[i + 1] === "\n") i++;
+                    linha.push(campo.trim());
+                    if (linha.some(valor => valor !== "")) linhas.push(linha);
+                    linha = [];
+                    campo = "";
+                } else {
+                    campo += caractere;
+                }
+            }
+
+            if (campo !== "" || linha.length > 0) {
+                linha.push(campo.trim());
+                if (linha.some(valor => valor !== "")) linhas.push(linha);
+            }
+
+            return linhas;
+        }
+
+        function numeroPlanilha(valor) {
+            const normalizado = String(valor ?? "").trim().replace(/\s/g, "");
+            if (!normalizado) return null;
+
+            let valorNumerico = normalizado;
+            if (/^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(normalizado)) {
+                valorNumerico = normalizado.replace(/\./g, "").replace(",", ".");
+            } else if (/^\d+(?:,\d+)?$/.test(normalizado)) {
+                valorNumerico = normalizado.replace(",", ".");
+            } else if (!/^\d+(?:\.\d+)?$/.test(normalizado)) {
+                return null;
+            }
+
+            const numero = Number(valorNumerico);
+            return Number.isFinite(numero) && numero >= 0 ? numero : null;
+        }
+
+        function escaparHTML(valor) {
+            return String(valor ?? "").replace(/[&<>"']/g, caractere => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            })[caractere]);
+        }
+
+        async function salvarDados() {
+            if (!supabaseDisponivel) {
+                alert("Não foi possível salvar: conexão com o Supabase indisponível.");
+                return false;
+            }
+
+            try {
+                const dadosParaSalvar = viatura => {
+                    const { id, ...dados } = viatura;
+                    return {
+                        ...dados,
+                        ultimaRevisao: dados.ultimaRevisao || null,
+                        trocaOleo: dados.trocaOleo || null
+                    };
+                };
+
+                for (const viatura of viaturas) {
+                    const dados = dadosParaSalvar(viatura);
+                    const anterior = viaturasPersistidas.find(registro => registro.id === viatura.id);
+
+                    if (viatura.id === null || viatura.id === undefined) {
+                        const { data, error } = await supabaseClient
+                            .from("viaturas")
+                            .insert(dados)
+                            .select("id")
+                            .single();
+                        if (error) throw error;
+                        viatura.id = data.id;
+                    } else if (!anterior || JSON.stringify(dadosParaSalvar(anterior)) !== JSON.stringify(dados)) {
+                        const { error } = await supabaseClient
+                            .from("viaturas")
+                            .update(dados)
+                            .eq("id", viatura.id);
+                        if (error) throw error;
+                    }
+                }
+
+                const idsAtuais = new Set(viaturas.map(viatura => viatura.id));
+                for (const anterior of viaturasPersistidas) {
+                    if (!idsAtuais.has(anterior.id)) {
+                        const { error } = await supabaseClient
+                            .from("viaturas")
+                            .delete()
+                            .eq("id", anterior.id);
+                        if (error) throw error;
+                    }
+                }
+
+                viaturasPersistidas = JSON.parse(JSON.stringify(viaturas));
+                return true;
+            } catch (erro) {
+                console.error("Erro ao salvar viaturas no Supabase:", erro);
+                alert(`Erro ao salvar no Supabase: ${erro.message || erro}`);
+                return false;
+            }
+        }
+
+        function formatarData(data) {
+            if (!data) return "-";
+
+            const [ano, mes, dia] = String(data).split("-");
+
+            if (!ano || !mes || !dia) return "-";
+
+            return `${dia}/${mes}/${ano}`;
+        }
+
+        function parseData(data) {
+            if (!data) return null;
+
+            const correspondencia = String(data).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!correspondencia) return null;
+
+            const ano = Number(correspondencia[1]);
+            const mes = Number(correspondencia[2]);
+            const dia = Number(correspondencia[3]);
+
+            const dataObj = new Date(ano, mes - 1, dia);
+
+            if (Number.isNaN(dataObj.getTime()) ||
+                dataObj.getFullYear() !== ano ||
+                dataObj.getMonth() !== mes - 1 ||
+                dataObj.getDate() !== dia) {
+                return null;
+            }
+
+            return dataObj;
+        }
+
+        function obterDataHojeSemHora() {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            return hoje;
+        }
+
+        function dataVencida(data) {
+            const dataObj = parseData(data);
+
+            if (!dataObj) {
+                return false;
+            }
+
+            const hoje = obterDataHojeSemHora();
+            const dataLimite = new Date(dataObj);
+            dataLimite.setHours(0, 0, 0, 0);
+
+            return dataLimite <= hoje;
+        }
+
+        function revisaoAtrasada(data) {
+            const dataObj = parseData(data);
+
+            if (!dataObj) {
+                return false;
+            }
+
+            const hoje = obterDataHojeSemHora();
+            const diferencaDias = (
+                Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) -
+                Date.UTC(dataObj.getFullYear(), dataObj.getMonth(), dataObj.getDate())
+            ) / 86400000;
+
+            return diferencaDias > 180;
+        }
+
+        function limparFormulario() {
+            document.getElementById("placa").value = "";
+            document.getElementById("prefixo").value = "";
+            document.getElementById("marca").value = "";
+            document.getElementById("modelo").value = "";
+            document.getElementById("ano").value = "";
+            document.getElementById("emprego").value = "";
+            document.getElementById("observacao").value = "";
+            document.getElementById("km").value = "";
+            document.getElementById("status").value = "";
+            document.getElementById("ultimaRevisao").value = "";
+            document.getElementById("trocaOleo").value = "";
+            document.getElementById("kmTrocaOleo").value = "";
+            document.getElementById("kmTrocaFiltroOleo").value = "";
+            document.getElementById("kmTrocaFiltroCombustivel").value = "";
+            document.getElementById("kmTrocaFiltroAr").value = "";
+            indiceEdicao = -1;
+            document.querySelector(".btn-cadastrar").innerText = "Cadastrar";
+        }
+
+        function atualizarDashboard() {
+            let total = viaturas.length;
+
+            let disponiveis = viaturas.filter(v => v.status === "Disponível").length;
+            let manutencao = viaturas.filter(v => v.status === "Manutenção").length;
+            let emprestadas = viaturas.filter(v => v.status === "Emprestada").length;
+            let baixadas = viaturas.filter(v => v.status === "Baixada").length;
+
+            document.getElementById("totalViaturas").innerText = total;
+            document.getElementById("totalDisponiveis").innerText = disponiveis;
+            document.getElementById("totalManutencao").innerText = manutencao;
+            document.getElementById("totalEmprestadas").innerText = emprestadas;
+            document.getElementById("totalBaixadas").innerText = baixadas;
+        }
+
+        function atualizarTabela() {
+            let tabela = document.getElementById("listaViaturas");
+            const linhas = [];
+
+            const obterAnoModelo = ano => {
+                const anos = String(ano || "").match(/\d{4}/g) || [];
+                return anos.length ? Math.max(...anos.map(Number)) : 0;
+            };
+            const viaturasOrdenadas = viaturas
+                .map((viatura, indice) => ({ viatura, indice }))
+                .sort((a, b) => obterAnoModelo(b.viatura.ano) - obterAnoModelo(a.viatura.ano));
+
+            viaturasOrdenadas.forEach(function ({ viatura: v, indice }) {
+                const oleoVencido = Boolean(v.trocaOleo && dataVencida(v.trocaOleo));
+                const dataProximaTrocaOleo = parseData(v.trocaOleo);
+                const hoje = obterDataHojeSemHora();
+                const diasParaTrocaOleo = dataProximaTrocaOleo
+                    ? Math.round((
+                        Date.UTC(dataProximaTrocaOleo.getFullYear(), dataProximaTrocaOleo.getMonth(), dataProximaTrocaOleo.getDate()) -
+                        Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
+                    ) / 86400000)
+                    : null;
+                const oleoDataProximo = !oleoVencido && diasParaTrocaOleo >= 1 && diasParaTrocaOleo <= 30;
+                const kmAtualInformado = v.km !== null && v.km !== undefined && v.km !== "";
+                const kmAtual = kmAtualInformado ? Number(v.km) : NaN;
+                const kmProximaTroca = v.kmTrocaOleo !== null && v.kmTrocaOleo !== undefined && v.kmTrocaOleo !== ""
+                    ? Number(v.kmTrocaOleo)
+                    : NaN;
+                const quilometragemAlcancada = limite => {
+                    if (!Number.isFinite(kmAtual) || limite === null || limite === undefined || limite === "") return false;
+                    const kmLimite = Number(limite);
+                    return Number.isFinite(kmLimite) && kmAtual >= kmLimite;
+                };
+                const kmVencida = quilometragemAlcancada(v.kmTrocaOleo);
+                const kmRestantesTroca = kmProximaTroca - kmAtual;
+                const oleoProximo = !oleoVencido && !kmVencida &&
+                    Number.isFinite(kmAtual) && Number.isFinite(kmProximaTroca) &&
+                    kmRestantesTroca > 0 && kmRestantesTroca <= 500;
+                const filtroOleoVencido = quilometragemAlcancada(v.kmTrocaFiltroOleo);
+                const filtroCombustivelVencido = quilometragemAlcancada(v.kmTrocaFiltroCombustivel);
+                const filtroArVencido = quilometragemAlcancada(v.kmTrocaFiltroAr);
+                const revisaoAtrasadaAtual = Boolean(v.ultimaRevisao && revisaoAtrasada(v.ultimaRevisao));
+
+                let classeStatus = "";
+
+                if (v.status === "Disponível") {
+                    classeStatus = "status-disponivel";
+                } else if (v.status === "Manutenção") {
+                    classeStatus = "status-manutencao";
+                } else if (v.status === "Emprestada") {
+                    classeStatus = "status-emprestada";
+                } else {
+                    classeStatus = "status-baixada";
+                }
+
+                linhas.push(`
+                    <tr>
+                        <td>${escaparHTML(v.prefixo)}</td>
+                        <td>${escaparHTML(v.placa)}</td>
+                        <td>${escaparHTML(v.marca)}</td>
+                        <td>${escaparHTML(v.modelo)}</td>
+                        <td>${escaparHTML(v.ano)}</td>
+                        <td>${v.emprego ? escaparHTML(String(v.emprego).toLocaleUpperCase("pt-BR")) : "-"}</td>
+                        <td>${v.km !== null && v.km !== undefined && v.km !== ""
+                            ? Number(v.km).toLocaleString('pt-BR')
+                            : "-"}</td>
+
+                        <td class="${classeStatus}">
+                            ${escaparHTML(v.status || "-")}
+                        </td>
+
+                        <td>
+                            ${escaparHTML(formatarData(v.ultimaRevisao))}
+                        </td>
+
+                        <td style="${
+                            oleoVencido
+                                ? 'color:white;font-weight:bold;background:#dc3545;'
+                                : oleoDataProximo
+                                    ? 'color:#664d03;font-weight:bold;background:#ffd166;'
+                                    : ''
+                        }">
+                            ${v.trocaOleo ? escaparHTML(formatarData(v.trocaOleo)) : "-"}
+                        </td>
+
+                        <td style="${
+                            kmVencida
+                                ? 'color:white;font-weight:bold;background:#dc3545;'
+                                : oleoProximo
+                                    ? 'color:#664d03;font-weight:bold;background:#ffd166;'
+                                    : ''
+                        }">
+                            ${v.kmTrocaOleo !== null && v.kmTrocaOleo !== undefined && v.kmTrocaOleo !== ""
+                                ? Number(v.kmTrocaOleo).toLocaleString('pt-BR')
+                                : "-"}
+                        </td>
+
+                        <td style="${
+                            filtroOleoVencido
+                                ? 'color:white;font-weight:bold;background:#dc3545;'
+                                : ''
+                        }">
+                            ${v.kmTrocaFiltroOleo !== null && v.kmTrocaFiltroOleo !== undefined && v.kmTrocaFiltroOleo !== ""
+                                ? Number(v.kmTrocaFiltroOleo).toLocaleString('pt-BR')
+                                : "-"}
+                        </td>
+
+                        <td style="${
+                            filtroCombustivelVencido
+                                ? 'color:white;font-weight:bold;background:#dc3545;'
+                                : ''
+                        }">
+                            ${v.kmTrocaFiltroCombustivel !== null && v.kmTrocaFiltroCombustivel !== undefined && v.kmTrocaFiltroCombustivel !== ""
+                                ? Number(v.kmTrocaFiltroCombustivel).toLocaleString('pt-BR')
+                                : "-"}
+                        </td>
+
+                        <td style="${
+                            filtroArVencido
+                                ? 'color:white;font-weight:bold;background:#dc3545;'
+                                : ''
+                        }">
+                            ${v.kmTrocaFiltroAr !== null && v.kmTrocaFiltroAr !== undefined && v.kmTrocaFiltroAr !== ""
+                                ? Number(v.kmTrocaFiltroAr).toLocaleString('pt-BR')
+                                : "-"}
+                        </td>
+
+                        <td>
+                            ${oleoVencido ? "🛢️ Óleo vencido<br>" : ""}
+                            ${oleoDataProximo ? `⚠️ Troca de óleo em ${diasParaTrocaOleo} ${diasParaTrocaOleo === 1 ? "dia" : "dias"}<br>` : ""}
+                            ${kmVencida ? "🚨 Troca por KM vencida<br>" : ""}
+                            ${oleoProximo ? `⚠️ Troca de óleo em ${kmRestantesTroca.toLocaleString("pt-BR")} km<br>` : ""}
+                            ${filtroOleoVencido ? "🧼 Filtro de óleo vencido<br>" : ""}
+                            ${filtroCombustivelVencido ? "⛽ Filtro de combustível vencido<br>" : ""}
+                            ${filtroArVencido ? "🌬️ Filtro de ar vencido<br>" : ""}
+                            ${oleoVencido && kmVencida ? "<strong style='color:red'>🚨 TROCA URGENTE</strong>" : ""}
+                            ${revisaoAtrasadaAtual ? "🔧 Revisão atrasada" : ""}
+                        </td>
+
+                        <td>
+                            <button class="btn-historico" onclick="abrirHistorico(${indice})">Histórico</button>
+                            <button class="btn-editar" onclick="editar(${indice})">Editar</button>
+                            <button class="btn-excluir" onclick="excluir(${indice})">Excluir</button>
+                        </td>
+                        <td>${escaparHTML(v.observacao) || "-"}</td>
+                    </tr>
+                `);
+            });
+
+            tabela.innerHTML = linhas.join("");
+            atualizarDashboard();
+            filtrarTabela();
+        }
+
+        async function cadastrar() {
+            let placa = document.getElementById("placa").value.trim().toLocaleUpperCase("pt-BR");
+            let prefixo = document.getElementById("prefixo").value.trim().toLocaleUpperCase("pt-BR");
+            let marca = document.getElementById("marca").value.trim().toLocaleUpperCase("pt-BR");
+            let modelo = document.getElementById("modelo").value.trim().toLocaleUpperCase("pt-BR");
+            let ano = document.getElementById("ano").value.trim();
+            let emprego = document.getElementById("emprego").value.trim().toLocaleUpperCase("pt-BR");
+            let observacao = document.getElementById("observacao").value.trim();
+            let km = document.getElementById("km").value.trim();
+            let status = document.getElementById("status").value;
+            let ultimaRevisao = document.getElementById("ultimaRevisao").value;
+            let trocaOleo = document.getElementById("trocaOleo").value;
+            let kmTrocaOleo = document.getElementById("kmTrocaOleo").value.trim();
+            let kmTrocaFiltroOleo = document.getElementById("kmTrocaFiltroOleo").value.trim();
+            let kmTrocaFiltroCombustivel = document.getElementById("kmTrocaFiltroCombustivel").value.trim();
+            let kmTrocaFiltroAr = document.getElementById("kmTrocaFiltroAr").value.trim();
+
+            const camposObrigatorios = [
+                { id: "prefixo", nome: "Prefixo" },
+                { id: "placa", nome: "Placa" },
+                { id: "marca", nome: "Marca" },
+                { id: "modelo", nome: "Modelo" },
+                { id: "ano", nome: "Ano" },
+                { id: "km", nome: "KM Atual" },
+                { id: "status", nome: "Status" }
+            ];
+            const camposPendentes = camposObrigatorios.filter(({ id }) =>
+                !document.getElementById(id).value.trim()
+            );
+
+            camposObrigatorios.forEach(({ id }) => {
+                const campo = document.getElementById(id);
+                campo.classList.toggle("campo-obrigatorio-pendente", !campo.value.trim());
+            });
+
+            if (camposPendentes.length > 0) {
+                const primeiroCampo = document.getElementById(camposPendentes[0].id);
+                primeiroCampo.scrollIntoView({ behavior: "smooth", block: "center" });
+                primeiroCampo.focus({ preventScroll: true });
+                alert(`Preencha os campos obrigatórios: ${camposPendentes.map(({ nome }) => nome).join(", ")}.`);
+                return;
+            }
+
+            const kmNumero = Number(km);
+            const kmTrocaOleoNumero = kmTrocaOleo === "" ? null : Number(kmTrocaOleo);
+            const kmTrocaFiltroOleoNumero = kmTrocaFiltroOleo === "" ? null : Number(kmTrocaFiltroOleo);
+            const kmTrocaFiltroCombustivelNumero = kmTrocaFiltroCombustivel === "" ? null : Number(kmTrocaFiltroCombustivel);
+            const kmTrocaFiltroArNumero = kmTrocaFiltroAr === "" ? null : Number(kmTrocaFiltroAr);
+
+            const anos = ano.split("/");
+            if (!/^\d{4}(\/\d{4})?$/.test(ano) ||
+                anos.some(valor => Number(valor) < 1950 || Number(valor) > 2100)) {
+                alert("Informe o ano no formato AAAA ou AAAA/AAAA, entre 1950 e 2100.");
+                return;
+            }
+
+            if (!Number.isFinite(kmNumero) || kmNumero < 0) {
+                alert("O KM Atual não pode ser negativo.");
+                return;
+            }
+
+            if (kmTrocaOleo !== "" && (!Number.isFinite(kmTrocaOleoNumero) || kmTrocaOleoNumero < 0)) {
+                alert("A quilometragem não pode ser negativa.");
+                return;
+            }
+
+            if (kmTrocaFiltroOleo !== "" && (!Number.isFinite(kmTrocaFiltroOleoNumero) || kmTrocaFiltroOleoNumero < 0)) {
+                alert("A quilometragem do filtro de óleo não pode ser negativa.");
+                return;
+            }
+
+            if (kmTrocaFiltroCombustivel !== "" && (!Number.isFinite(kmTrocaFiltroCombustivelNumero) || kmTrocaFiltroCombustivelNumero < 0)) {
+                alert("A quilometragem do filtro de combustível não pode ser negativa.");
+                return;
+            }
+
+            if (kmTrocaFiltroAr !== "" && (!Number.isFinite(kmTrocaFiltroArNumero) || kmTrocaFiltroArNumero < 0)) {
+                alert("A quilometragem do filtro de ar não pode ser negativa.");
+                return;
+            }
+
+            const existe = viaturas.some((v, i) =>
+                i !== indiceEdicao && (
+                    (v.placa || "").toUpperCase() === placa.toUpperCase() ||
+                    (v.prefixo || "").toUpperCase() === prefixo.toUpperCase()
+                )
+            );
+
+            if (existe) {
+                alert("Já existe uma viatura com esta placa ou prefixo.");
+                return;
+            }
+
+            const viaturaAnterior = indiceEdicao >= 0 ? viaturas[indiceEdicao] : null;
+            const viatura = {
+                ...(viaturaAnterior || {}),
+                historicoManutencao: Array.isArray(viaturaAnterior?.historicoManutencao)
+                    ? viaturaAnterior.historicoManutencao
+                    : [],
+                placa,
+                prefixo,
+                marca,
+                modelo,
+                ano,
+                emprego,
+                observacao,
+                km: kmNumero,
+                status,
+                kmUltimoAbastecimento: indiceEdicao >= 0
+                    ? (viaturas[indiceEdicao].kmUltimoAbastecimento ?? null)
+                    : null,
+                ultimaRevisao,
+                trocaOleo,
+                kmTrocaOleo: kmTrocaOleoNumero,
+                kmTrocaFiltroOleo: kmTrocaFiltroOleoNumero,
+                kmTrocaFiltroCombustivel: kmTrocaFiltroCombustivelNumero,
+                kmTrocaFiltroAr: kmTrocaFiltroArNumero
+            };
+
+            if (indiceEdicao === -1) {
+                viaturas.push(viatura);
+            } else {
+                viaturas[indiceEdicao] = viatura;
+            }
+
+            if (!await salvarDados()) {
+                await carregarDados();
+                atualizarTabela();
+                return;
+            }
+            atualizarTabela();
+            limparFormulario();
+        }
+
+        async function importarViaturasPlanilha() {
+            const botao = document.querySelector(".btn-importar");
+            botao.disabled = true;
+            botao.innerText = "Carregando planilha...";
+
+            try {
+                const resposta = await fetch(urlPlanilha);
+                if (!resposta.ok) {
+                    throw new Error(`A planilha respondeu com status ${resposta.status}.`);
+                }
+
+                const linhas = parsearCSV(await resposta.text());
+                if (linhas.length < 2 || String(linhas[0]?.[0] || "").replace(/^\uFEFF/, "").toUpperCase() !== "FROTA") {
+                    throw new Error("Não foi possível reconhecer as colunas da planilha.");
+                }
+
+                const registros = linhas.slice(1)
+                    .filter(linha => String(linha[0] || "").trim() && !/^\d+$/.test(String(linha[0]).trim()))
+                    .map(linha => ({
+                        prefixo: String(linha[0] || "").trim().toLocaleUpperCase("pt-BR"),
+                        placa: String(linha[1] || "").trim().toLocaleUpperCase("pt-BR"),
+                        marca: String(linha[2] || "").trim().toLocaleUpperCase("pt-BR"),
+                        modelo: String(linha[3] || "").trim().toLocaleUpperCase("pt-BR"),
+                        ano: String(linha[4] || "").trim(),
+                        emprego: String(linha[5] || "").trim().toLocaleUpperCase("pt-BR"),
+                        km: numeroPlanilha(linha[17]),
+                        kmRevisao: numeroPlanilha(linha[18]),
+                        statusOrigem: (linha[14] || "").toLocaleUpperCase("pt-BR"),
+                        observacao: String(linha[20] || "")
+                    }));
+
+                if (registros.length === 0) {
+                    throw new Error("A planilha não contém viaturas para importar.");
+                }
+
+                const unicos = [];
+                const identificadores = new Set();
+                registros.forEach(registro => {
+                    const prefixo = registro.prefixo.toLocaleUpperCase("pt-BR");
+                    const placa = registro.placa.toLocaleUpperCase("pt-BR");
+                    const chave = `${prefixo}|${placa}`;
+                    if (!identificadores.has(chave)) {
+                        identificadores.add(chave);
+                        unicos.push(registro);
+                    }
+                });
+
+                const operacoes = unicos.map(registro => {
+                    const existente = viaturas.find(v =>
+                        (registro.placa && (v.placa || "").toLocaleUpperCase("pt-BR") === registro.placa.toLocaleUpperCase("pt-BR")) ||
+                        (
+                            (!registro.placa || !v.placa) &&
+                            (v.prefixo || "").toLocaleUpperCase("pt-BR") === registro.prefixo.toLocaleUpperCase("pt-BR")
+                        )
+                    );
+
+                    if (!existente) {
+                        let status = "Disponível";
+                        const indicacaoStatus = `${registro.statusOrigem} ${registro.observacao}`.toLocaleUpperCase("pt-BR");
+                        if (indicacaoStatus.includes("BAIXAD") || indicacaoStatus.includes("INATIV")) {
+                            status = "Baixada";
+                        } else if (indicacaoStatus.includes("EMPREST")) {
+                            status = "Emprestada";
+                        } else if (indicacaoStatus.includes("MANUT")) {
+                            status = "Manutenção";
+                        }
+
+                        return { registro, existente: null, status };
+                    }
+
+                    const alteracoes = {};
+                    ["placa", "marca", "modelo", "ano"].forEach(campo => {
+                        if (registro[campo] && existente[campo] !== registro[campo]) {
+                            alteracoes[campo] = registro[campo];
+                        }
+                    });
+                    if (registro.emprego && existente.emprego !== registro.emprego.toLocaleUpperCase("pt-BR")) {
+                        alteracoes.emprego = registro.emprego.toLocaleUpperCase("pt-BR");
+                    }
+                    const kmAtualExistente = Number(existente.km);
+                    const semKmAtual = existente.km === null || existente.km === undefined || existente.km === "" || !Number.isFinite(kmAtualExistente);
+                    if (registro.km !== null && (semKmAtual || registro.km > kmAtualExistente)) {
+                        alteracoes.km = registro.km;
+                    }
+                    if (registro.kmRevisao !== null && existente.kmTrocaOleo !== registro.kmRevisao) {
+                        alteracoes.kmTrocaOleo = registro.kmRevisao;
+                    }
+                    if (registro.observacao && existente.observacao !== registro.observacao) {
+                        alteracoes.observacao = registro.observacao;
+                    }
+
+                    const indicacaoStatus = `${registro.statusOrigem} ${registro.observacao}`.toLocaleUpperCase("pt-BR");
+                    if (indicacaoStatus.includes("BAIXAD") || indicacaoStatus.includes("INATIV")) {
+                        alteracoes.status = "Baixada";
+                    } else if (indicacaoStatus.includes("EMPREST")) {
+                        alteracoes.status = "Emprestada";
+                    } else if (indicacaoStatus.includes("MANUT")) {
+                        alteracoes.status = "Manutenção";
+                    }
+
+                    return { registro, existente, alteracoes };
+                });
+
+                const novas = operacoes.filter(operacao => !operacao.existente).length;
+                const atualizadas = operacoes.filter(operacao =>
+                    operacao.existente && Object.keys(operacao.alteracoes).length > 0
+                ).length;
+
+                if (novas === 0 && atualizadas === 0) {
+                    alert("Todas as viaturas da planilha já estão cadastradas e atualizadas.");
+                    return;
+                }
+
+                if (!confirm(`A planilha contém ${unicos.length} viaturas. Serão adicionadas ${novas} e atualizados ${atualizadas} cadastros existentes. Deseja continuar?`)) {
+                    return;
+                }
+
+                operacoes.forEach(({ registro, existente, status, alteracoes }) => {
+                    if (existente) {
+                        Object.assign(existente, alteracoes);
+                    } else {
+                        viaturas.push({
+                            prefixo: registro.prefixo,
+                            placa: registro.placa,
+                            marca: registro.marca,
+                            modelo: registro.modelo,
+                            ano: registro.ano,
+                            emprego: registro.emprego.toLocaleUpperCase("pt-BR"),
+                            observacao: registro.observacao,
+                            km: registro.km,
+                            status,
+                            kmUltimoAbastecimento: null,
+                            ultimaRevisao: "",
+                            trocaOleo: "",
+                            kmTrocaOleo: registro.kmRevisao,
+                            kmTrocaFiltroOleo: null,
+                            kmTrocaFiltroCombustivel: null,
+                            kmTrocaFiltroAr: null
+                        });
+                    }
+                });
+
+                if (!await salvarDados()) {
+                    await carregarDados();
+                    atualizarTabela();
+                    return;
+                }
+                atualizarTabela();
+                alert(`${novas} viaturas adicionadas e ${atualizadas} cadastros atualizados com sucesso.`);
+            } catch (erro) {
+                console.error("Erro ao importar viaturas da planilha:", erro);
+                alert(`Não foi possível importar a planilha: ${erro.message}`);
+            } finally {
+                botao.disabled = false;
+                botao.innerText = "Importar/atualizar viaturas da planilha";
+            }
+        }
+
+        function abrirHistorico(indice) {
+            const viatura = viaturas[indice];
+            if (!viatura) {
+                alert("Não foi possível encontrar esta viatura.");
+                return;
+            }
+
+            if (!Array.isArray(viatura.historicoManutencao)) {
+                viatura.historicoManutencao = [];
+            }
+
+            indiceHistorico = indice;
+            document.getElementById("historicoTitulo").innerText =
+                `Histórico de manutenção — ${viatura.prefixo} / ${viatura.placa || "sem placa"}`;
+            document.getElementById("formHistorico").reset();
+            indiceEdicaoHistorico = -1;
+            document.getElementById("historicoFormTitulo").innerText = "Registrar manutenção";
+            document.querySelector("#formHistorico .btn-cadastrar").innerText = "Salvar manutenção";
+            document.getElementById("cancelarEdicaoManutencao").hidden = true;
+            renderizarHistorico();
+            document.getElementById("historicoDialog").showModal();
+        }
+
+        function renderizarHistorico() {
+            const viatura = viaturas[indiceHistorico];
+            const lista = document.getElementById("listaHistorico");
+
+            if (!viatura || !Array.isArray(viatura.historicoManutencao) || viatura.historicoManutencao.length === 0) {
+                lista.innerHTML = "<p>Nenhuma manutenção registrada para esta viatura.</p>";
+                return;
+            }
+
+            const registros = viatura.historicoManutencao
+                .map((registro, indice) => ({ registro, indice }))
+                .sort((a, b) => String(b.registro.data).localeCompare(String(a.registro.data)));
+            lista.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>KM</th>
+                            <th>Serviço</th>
+                            <th>Oficina/Responsável</th>
+                            <th>Valor</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${registros.map(({ registro, indice }) => `
+                            <tr>
+                                <td>${escaparHTML(formatarData(registro.data))}</td>
+                                <td>${Number(registro.km).toLocaleString("pt-BR")}</td>
+                                <td>${escaparHTML(registro.descricao)}</td>
+                                <td>${escaparHTML(registro.oficina) || "-"}</td>
+                                <td>${registro.valor !== null && registro.valor !== undefined
+                                    ? Number(registro.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                                    : "-"}</td>
+                                <td>
+                                    <button type="button" class="btn-editar" onclick="editarManutencao(${indice})">Editar</button>
+                                    <button type="button" class="btn-excluir" onclick="excluirManutencao(${indice})">Excluir</button>
+                                </td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function editarManutencao(indice) {
+            const viatura = viaturas[indiceHistorico];
+            const registro = viatura?.historicoManutencao?.[indice];
+            if (!registro) {
+                alert("Não foi possível encontrar este registro de manutenção.");
+                return;
+            }
+
+            indiceEdicaoHistorico = indice;
+            document.getElementById("dataManutencao").value = registro.data || "";
+            document.getElementById("kmManutencao").value = registro.km ?? "";
+            document.getElementById("descricaoManutencao").value = registro.descricao || "";
+            document.getElementById("oficinaManutencao").value = registro.oficina || "";
+            document.getElementById("valorManutencao").value = registro.valor ?? "";
+            document.getElementById("historicoFormTitulo").innerText = "Editar manutenção";
+            document.querySelector("#formHistorico .btn-cadastrar").innerText = "Salvar alterações";
+            document.getElementById("cancelarEdicaoManutencao").hidden = false;
+            document.getElementById("dataManutencao").focus();
+        }
+
+        function cancelarEdicaoManutencao() {
+            indiceEdicaoHistorico = -1;
+            document.getElementById("formHistorico").reset();
+            document.getElementById("historicoFormTitulo").innerText = "Registrar manutenção";
+            document.querySelector("#formHistorico .btn-cadastrar").innerText = "Salvar manutenção";
+            document.getElementById("cancelarEdicaoManutencao").hidden = true;
+        }
+
+        function maiorKmConhecido(viatura) {
+            const valores = [
+                ...(Array.isArray(viatura.historicoManutencao)
+                    ? viatura.historicoManutencao.map(registro => registro.km)
+                    : []),
+                viatura.kmUltimoAbastecimento
+            ]
+                .map(valor => valor === null || valor === undefined || valor === "" ? NaN : Number(valor))
+                .filter(valor => Number.isFinite(valor) && valor >= 0);
+
+            return valores.length ? Math.max(...valores) : null;
+        }
+
+        async function excluirManutencao(indice) {
+            const viatura = viaturas[indiceHistorico];
+            const manutencaoRemovida = viatura?.historicoManutencao?.[indice];
+            if (!manutencaoRemovida) {
+                alert("Não foi possível encontrar este registro de manutenção.");
+                return;
+            }
+
+            if (!confirm("Deseja realmente excluir este registro de manutenção?")) {
+                return;
+            }
+
+            const kmAtualAntes = viatura.km === null || viatura.km === undefined || viatura.km === ""
+                ? NaN
+                : Number(viatura.km);
+            const kmRemovido = Number(manutencaoRemovida.km);
+            viatura.historicoManutencao.splice(indice, 1);
+            if (indiceEdicaoHistorico === indice) {
+                cancelarEdicaoManutencao();
+            } else if (indiceEdicaoHistorico > indice) {
+                indiceEdicaoHistorico--;
+            }
+
+            atualizarResumoManutencao(viatura);
+            if (Number.isFinite(kmAtualAntes) && kmAtualAntes === kmRemovido) {
+                viatura.km = maiorKmConhecido(viatura);
+            }
+            if (!await salvarDados()) {
+                await carregarDados();
+                atualizarTabela();
+                renderizarHistorico();
+                return;
+            }
+            atualizarTabela();
+            renderizarHistorico();
+        }
+
+        function atualizarResumoManutencao(viatura) {
+            const manutencaoMaisRecente = viatura.historicoManutencao.reduce((maisRecente, registro) =>
+                !maisRecente || String(registro.data).localeCompare(String(maisRecente.data)) > 0
+                    ? registro
+                    : maisRecente,
+            null);
+            viatura.ultimaRevisao = manutencaoMaisRecente?.data || "";
+
+            if (manutencaoMaisRecente && Number(manutencaoMaisRecente.km) > Number(viatura.km || 0)) {
+                viatura.km = Number(manutencaoMaisRecente.km);
+            }
+        }
+
+        async function registrarManutencao(evento) {
+            evento.preventDefault();
+            const viatura = viaturas[indiceHistorico];
+
+            if (!viatura) {
+                alert("Não foi possível encontrar esta viatura.");
+                return;
+            }
+
+            const data = document.getElementById("dataManutencao").value;
+            const km = Number(document.getElementById("kmManutencao").value);
+            const descricao = document.getElementById("descricaoManutencao").value.trim();
+            const oficina = document.getElementById("oficinaManutencao").value.trim();
+            const valorInformado = document.getElementById("valorManutencao").value.trim();
+            const valor = valorInformado === "" ? null : Number(valorInformado);
+
+            if (!data || !descricao || !Number.isFinite(km) || km < 0 ||
+                (valor !== null && (!Number.isFinite(valor) || valor < 0))) {
+                alert("Confira a data, a quilometragem, o serviço e o valor informado.");
+                return;
+            }
+
+            if (!Array.isArray(viatura.historicoManutencao)) {
+                viatura.historicoManutencao = [];
+            }
+
+            const manutencao = {
+                data,
+                km,
+                descricao,
+                oficina,
+                valor
+            };
+
+            const estavaEditando = indiceEdicaoHistorico >= 0;
+            const registroAnterior = estavaEditando
+                ? viatura.historicoManutencao[indiceEdicaoHistorico]
+                : null;
+            const kmAtualAntes = viatura.km === null || viatura.km === undefined || viatura.km === ""
+                ? NaN
+                : Number(viatura.km);
+            const kmRegistroAnterior = registroAnterior ? Number(registroAnterior.km) : NaN;
+
+            if (estavaEditando) {
+                if (!viatura.historicoManutencao[indiceEdicaoHistorico]) {
+                    alert("Não foi possível encontrar este registro de manutenção.");
+                    return;
+                }
+                viatura.historicoManutencao[indiceEdicaoHistorico] = manutencao;
+            } else {
+                viatura.historicoManutencao.push(manutencao);
+            }
+
+            if (viatura.km === null || viatura.km === undefined || km > Number(viatura.km)) {
+                viatura.km = km;
+            }
+
+            atualizarResumoManutencao(viatura);
+            if (estavaEditando && Number.isFinite(kmAtualAntes) &&
+                kmAtualAntes === kmRegistroAnterior && km < kmRegistroAnterior) {
+                viatura.km = maiorKmConhecido(viatura);
+            }
+            if (!await salvarDados()) {
+                await carregarDados();
+                atualizarTabela();
+                renderizarHistorico();
+                return;
+            }
+            atualizarTabela();
+            renderizarHistorico();
+            cancelarEdicaoManutencao();
+        }
+
+        function fecharHistorico() {
+            document.getElementById("historicoDialog").close();
+            indiceHistorico = -1;
+            indiceEdicaoHistorico = -1;
+        }
+
+        function editar(indice) {
+            const viatura = viaturas[indice];
+
+            if (!viatura) {
+                alert("Não foi possível encontrar esta viatura.");
+                return;
+            }
+
+            document.getElementById("prefixo").value = viatura.prefixo || "";
+            document.getElementById("placa").value = viatura.placa || "";
+            document.getElementById("marca").value = viatura.marca || "";
+            document.getElementById("modelo").value = viatura.modelo || "";
+            document.getElementById("ano").value = viatura.ano || "";
+            document.getElementById("emprego").value = viatura.emprego || "";
+            document.getElementById("observacao").value = viatura.observacao || "";
+            document.getElementById("km").value = viatura.km ?? "";
+            document.getElementById("status").value = viatura.status || "";
+            document.getElementById("ultimaRevisao").value = viatura.ultimaRevisao || "";
+            document.getElementById("trocaOleo").value = viatura.trocaOleo || "";
+            document.getElementById("kmTrocaOleo").value = viatura.kmTrocaOleo ?? "";
+            document.getElementById("kmTrocaFiltroOleo").value = viatura.kmTrocaFiltroOleo ?? "";
+            document.getElementById("kmTrocaFiltroCombustivel").value = viatura.kmTrocaFiltroCombustivel ?? "";
+            document.getElementById("kmTrocaFiltroAr").value = viatura.kmTrocaFiltroAr ?? "";
+            indiceEdicao = indice;
+            document.querySelector(".btn-cadastrar").innerText = "Salvar alterações";
+            document.getElementById("prefixo").focus();
+        }
+
+        async function excluir(indice) {
+            if (!viaturas[indice]) {
+                alert("Não foi possível encontrar esta viatura.");
+                return;
+            }
+
+            if (!confirm("Deseja realmente excluir esta viatura?")) {
+                return;
+            }
+
+            viaturas.splice(indice, 1);
+            if (!await salvarDados()) {
+                await carregarDados();
+                atualizarTabela();
+                return;
+            }
+            atualizarTabela();
+
+            if (indiceEdicao === indice) {
+                limparFormulario();
+            } else if (indiceEdicao > indice) {
+                indiceEdicao--;
+            }
+        }
+
+        function filtrarTabela() {
+            const campoPesquisa = document.getElementById("pesquisa");
+            const pesquisa = campoPesquisa.value.trim().toLocaleLowerCase("pt-BR");
+            filtroAtual = pesquisa;
+            document.getElementById("btnLimparPesquisa").hidden = !pesquisa;
+
+            document.querySelectorAll("#listaViaturas tr").forEach(linha => {
+                linha.hidden = !linha.textContent.toLocaleLowerCase("pt-BR").includes(filtroAtual);
+            });
+        }
+
+        function limparPesquisa() {
+            const campoPesquisa = document.getElementById("pesquisa");
+            campoPesquisa.value = "";
+            filtrarTabela();
+            campoPesquisa.focus();
+        }
+
+        async function carregarDados() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from("viaturas")
+                    .select("id,prefixo,placa,marca,modelo,ano,emprego,observacao,km,status,kmUltimoAbastecimento,ultimaRevisao,trocaOleo,kmTrocaOleo,kmTrocaFiltroOleo,kmTrocaFiltroCombustivel,kmTrocaFiltroAr,historicoManutencao")
+                    .order("id");
+                if (error) throw error;
+
+                viaturas = data.map(viatura => ({
+                    ...viatura,
+                    prefixo: String(viatura.prefixo || "").toLocaleUpperCase("pt-BR"),
+                    placa: String(viatura.placa || "").toLocaleUpperCase("pt-BR"),
+                    marca: String(viatura.marca || "").toLocaleUpperCase("pt-BR"),
+                    modelo: String(viatura.modelo || "").toLocaleUpperCase("pt-BR"),
+                    emprego: String(viatura.emprego || "").toLocaleUpperCase("pt-BR"),
+                    historicoManutencao: Array.isArray(viatura.historicoManutencao)
+                        ? viatura.historicoManutencao
+                        : []
+                }));
+                viaturasPersistidas = JSON.parse(JSON.stringify(viaturas));
+                supabaseDisponivel = true;
+            } catch (erro) {
+                supabaseDisponivel = false;
+                viaturas = [];
+                viaturasPersistidas = [];
+                console.error("Erro ao carregar viaturas do Supabase:", erro);
+                alert(`Não foi possível carregar as viaturas do Supabase: ${erro.message || erro}`);
+            }
+        }
+
+        async function aplicarKmAbastecimentosConfirmados() {
+            const chaveMigracao = "kmAbastecimentosConfirmados_v1";
+            try {
+                if (localStorage.getItem(chaveMigracao) === "1") return;
+            } catch (erro) {
+                console.warn("Não foi possível verificar a migração de KM:", erro);
+                return;
+            }
+
+            const kmPorPlaca = new Map([
+                ["SXD4F41", 50956],
+                ["RXR5D08", 4950],
+                ["RLA2A11", 96866],
+                ["RXS9A03", 90966],
+                ["RXR8J89", 73133],
+                ["RYW3B52", 63010]
+            ]);
+            let alterou = false;
+            let encontrouViatura = false;
+
+            viaturas.forEach(viatura => {
+                const kmConfirmado = kmPorPlaca.get(String(viatura.placa || "").toLocaleUpperCase("pt-BR"));
+                if (kmConfirmado === undefined) return;
+                encontrouViatura = true;
+
+                if ((Number(viatura.km) || 0) < kmConfirmado) {
+                    viatura.km = kmConfirmado;
+                    alterou = true;
+                }
+                if ((Number(viatura.kmUltimoAbastecimento) || 0) < kmConfirmado) {
+                    viatura.kmUltimoAbastecimento = kmConfirmado;
+                    alterou = true;
+                }
+            });
+
+            if (!encontrouViatura || (alterou && !await salvarDados())) return;
+
+            try {
+                localStorage.setItem(chaveMigracao, "1");
+            } catch (erro) {
+                console.warn("Não foi possível registrar a migração de KM:", erro);
+            }
+        }
+
+        const formularioPrincipal = document.querySelector(".formulario .grid");
+        const camposEmMaiusculas = new Set(["prefixo", "placa", "marca", "modelo", "emprego"]);
+        const limparDestaqueCampo = event => {
+            const campo = event.target;
+            if (campo.matches("input, select")) {
+                if (camposEmMaiusculas.has(campo.id)) {
+                    campo.value = campo.value.toLocaleUpperCase("pt-BR");
+                }
+                if (campo.value.trim()) {
+                    campo.classList.remove("campo-obrigatorio-pendente");
+                }
+            }
+        };
+        formularioPrincipal.addEventListener("input", limparDestaqueCampo);
+        formularioPrincipal.addEventListener("change", limparDestaqueCampo);
+
+        async function iniciarAplicacao() {
+            await carregarDados();
+            await aplicarKmAbastecimentosConfirmados();
+            atualizarTabela();
+        }
+
+        iniciarAplicacao();
+    </script>
+</body>
+</html>
