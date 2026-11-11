@@ -710,6 +710,7 @@
         }
 
         let viaturas = [];
+        let perfilUsuario = "consulta";
         let viaturasPersistidas = [];
         let supabaseDisponivel = false;
         let indiceEdicao = -1;
@@ -1093,10 +1094,34 @@
                         </td>
 
                         <td>
-                            <button class="btn-historico" onclick="abrirHistorico(${indice})">Histórico</button>
-                            <button type="button" class="btn-dados" onclick="mostrarDados(${indice})">Dados</button>
-                            <button class="btn-editar" onclick="editar(${indice})">Editar</button>
-                            <button class="btn-excluir" onclick="excluir(${indice})">Excluir</button>
+                            <button class="btn-historico"
+                                    onclick="abrirHistorico(${indice})">
+                                Histórico
+                            </button>
+
+                            <button type="button"
+                                    class="btn-dados"
+                                    onclick="mostrarDados(${indice})">
+                                Dados
+                            </button>
+
+                            ${
+                                perfilUsuario === "admin"
+                                ?
+                                `
+                                <button class="btn-editar"
+                                        onclick="editar(${indice})">
+                                    Editar
+                                </button>
+
+                                <button class="btn-excluir"
+                                        onclick="excluir(${indice})">
+                                    Excluir
+                                </button>
+                                `
+                                :
+                                ""
+                            }
                         </td>
                         <td>${escaparHTML(v.observacao) || "-"}</td>
                     </tr>
@@ -1109,6 +1134,11 @@
         }
 
         async function cadastrar() {
+            if (perfilUsuario !== "admin") {
+                alert("Você não possui permissão para cadastrar ou editar viaturas.");
+                return;
+            }
+
             let placa = document.getElementById("placa").value.trim().toLocaleUpperCase("pt-BR");
             let prefixo = document.getElementById("prefixo").value.trim().toLocaleUpperCase("pt-BR");
             let marca = document.getElementById("marca").value.trim().toLocaleUpperCase("pt-BR");
@@ -1243,6 +1273,11 @@
         }
 
         async function importarViaturasPlanilha() {
+            if (perfilUsuario !== "admin") {
+                alert("Você não possui permissão para importar viaturas.");
+                return;
+            }
+
             const botao = document.querySelector(".btn-importar");
             botao.disabled = true;
             botao.innerText = "Carregando planilha...";
@@ -1267,6 +1302,10 @@
                         modelo: String(linha[3] || "").trim().toLocaleUpperCase("pt-BR"),
                         ano: String(linha[4] || "").trim(),
                         emprego: String(linha[5] || "").trim().toLocaleUpperCase("pt-BR"),
+                        cartao_abastecimento: String(linha[6] || "").trim(),
+                        chassi: String(linha[11] || "").trim(),
+                        renavam: String(linha[13] || "").trim(),
+                        numeracao_pneu: String(linha[15] || "").trim(),
                         km: numeroPlanilha(linha[17]),
                         kmRevisao: numeroPlanilha(linha[18]),
                         statusOrigem: (linha[14] || "").toLocaleUpperCase("pt-BR"),
@@ -1313,9 +1352,19 @@
                     }
 
                     const alteracoes = {};
-                    ["placa", "marca", "modelo", "ano"].forEach(campo => {
-                        if (registro[campo] && existente[campo] !== registro[campo]) {
-                            alteracoes[campo] = registro[campo];
+                    [
+                        ["placa", "placa"],
+                        ["marca", "marca"],
+                        ["modelo", "modelo"],
+                        ["ano", "ano"],
+                        ["cartao_abastecimento", "cartaoAbastecimento"],
+                        ["chassi", "chassi"],
+                        ["renavam", "renavam"],
+                        ["numeracao_pneu", "numeracaoPneu"]
+                    ].forEach(([campoPlanilha, campoViatura]) => {
+                        const valor = registro[campoPlanilha];
+                        if (valor && existente[campoViatura] !== valor) {
+                            alteracoes[campoViatura] = valor;
                         }
                     });
                     if (registro.emprego && existente.emprego !== registro.emprego.toLocaleUpperCase("pt-BR")) {
@@ -1370,6 +1419,10 @@
                             modelo: registro.modelo,
                             ano: registro.ano,
                             emprego: registro.emprego.toLocaleUpperCase("pt-BR"),
+                            cartaoAbastecimento: registro.cartao_abastecimento,
+                            chassi: registro.chassi,
+                            renavam: registro.renavam,
+                            numeracaoPneu: registro.numeracao_pneu,
                             observacao: registro.observacao,
                             km: registro.km,
                             status,
@@ -1639,6 +1692,11 @@
         }
 
         function editar(indice) {
+            if (perfilUsuario !== "admin") {
+                alert("Você não possui permissão para editar viaturas.");
+                return;
+            }
+
             const viatura = viaturas[indice];
 
             if (!viatura) {
@@ -1667,6 +1725,11 @@
         }
 
         async function excluir(indice) {
+            if (perfilUsuario !== "admin") {
+                alert("Você não possui permissão para excluir viaturas.");
+                return;
+            }
+
             if (!viaturas[indice]) {
                 alert("Não foi possível encontrar esta viatura.");
                 return;
@@ -1810,9 +1873,66 @@
         formularioPrincipal.addEventListener("input", limparDestaqueCampo);
         formularioPrincipal.addEventListener("change", limparDestaqueCampo);
 
+        async function carregarPerfilUsuario() {
+            perfilUsuario = "consulta";
+
+            const {
+                data: { user },
+                error: erroUsuario
+            } = await supabaseClient.auth.getUser();
+
+            console.log("Usuário autenticado:", user);
+
+            if (erroUsuario) {
+                console.error("Erro usuário:", erroUsuario);
+                return;
+            }
+
+            if (!user) {
+                console.log("Nenhum usuário autenticado");
+                return;
+            }
+
+            const { data, error } = await supabaseClient
+                .from("usuarios_perfis")
+                .select("*")
+                .eq("id", user.id)
+                .single();
+
+            console.log("Resultado perfil:", data);
+            console.log("Erro perfil:", error);
+
+            if (!error && data) {
+                perfilUsuario = data.perfil;
+                console.log("Perfil carregado:", perfilUsuario);
+            } else if (error) {
+                console.error("Erro ao carregar perfil do usuário:", error);
+            }
+        }
+
         async function iniciarAplicacao() {
+            await carregarPerfilUsuario();
             await carregarDados();
             await aplicarKmAbastecimentosConfirmados();
+
+            const btnCadastrar = document.querySelector(".formulario .btn-cadastrar");
+            const btnImportar = document.querySelector(".btn-importar");
+            if (perfilUsuario !== "admin") {
+                if (btnCadastrar) {
+                    btnCadastrar.style.display = "none";
+                }
+                if (btnImportar) {
+                    btnImportar.style.display = "none";
+                }
+            } else {
+                if (btnCadastrar) {
+                    btnCadastrar.style.display = "";
+                }
+                if (btnImportar) {
+                    btnImportar.style.display = "";
+                }
+            }
+
             atualizarTabela();
         }
 
