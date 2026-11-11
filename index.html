@@ -903,22 +903,7 @@
             return dataLimite <= hoje;
         }
 
-        function revisaoAtrasada(data) {
-            const dataObj = parseData(data);
-
-            if (!dataObj) {
-                return false;
-            }
-
-            const hoje = obterDataHojeSemHora();
-            const diferencaDias = (
-                Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) -
-                Date.UTC(dataObj.getFullYear(), dataObj.getMonth(), dataObj.getDate())
-            ) / 86400000;
-
-            return diferencaDias > 180;
-        }
-
+        
         function limparFormulario() {
             document.getElementById("placa").value = "";
             document.getElementById("prefixo").value = "";
@@ -995,7 +980,7 @@
                 const filtroOleoVencido = quilometragemAlcancada(v.kmTrocaFiltroOleo);
                 const filtroCombustivelVencido = quilometragemAlcancada(v.kmTrocaFiltroCombustivel);
                 const filtroArVencido = quilometragemAlcancada(v.kmTrocaFiltroAr);
-                const revisaoAtrasadaAtual = Boolean(v.ultimaRevisao && revisaoAtrasada(v.ultimaRevisao));
+                const revisaoAtrasadaAtual = Boolean(v.trocaOleo && dataVencida(v.trocaOleo));
 
                 let classeStatus = "";
 
@@ -1082,7 +1067,6 @@
                         </td>
 
                         <td>
-                            ${oleoVencido ? "🛢️ Óleo vencido<br>" : ""}
                             ${oleoDataProximo ? `⚠️ Troca de óleo em ${diasParaTrocaOleo} ${diasParaTrocaOleo === 1 ? "dia" : "dias"}<br>` : ""}
                             ${kmVencida ? "🚨 Troca por KM vencida<br>" : ""}
                             ${oleoProximo ? `⚠️ Troca de óleo em ${kmRestantesTroca.toLocaleString("pt-BR")} km<br>` : ""}
@@ -1090,7 +1074,7 @@
                             ${filtroCombustivelVencido ? "⛽ Filtro de combustível vencido<br>" : ""}
                             ${filtroArVencido ? "🌬️ Filtro de ar vencido<br>" : ""}
                             ${oleoVencido && kmVencida ? "<strong style='color:red'>🚨 TROCA URGENTE</strong>" : ""}
-                            ${revisaoAtrasadaAtual ? "🔧 Revisão atrasada" : ""}
+                            ${revisaoAtrasadaAtual ? "🚨 Manutenção vencida - troca de óleo pendente" : ""}
                         </td>
 
                         <td>
