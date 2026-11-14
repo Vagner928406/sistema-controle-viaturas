@@ -129,7 +129,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <form id="formHist" class="so-admin" hidden>
     <div class="grade">
       <div><label for="hData">Data</label><input type="date" id="hData" min="2000-01-01" max="2100-12-31" required></div>
-      <div><label for="hKm">KM da viatura</label><input type="number" id="hKm" min="0" required></div>
+      <div><label for="hKm">KM da viatura</label><input type="text" inputmode="numeric" class="milhar" id="hKm" required></div>
       <div><label for="hOficina">Oficina/Responsável</label><input id="hOficina"></div>
       <div><label for="hValor">Valor (R$)</label><input type="number" id="hValor" min="0" step="0.01"></div>
     </div>
@@ -324,7 +324,7 @@ function render() {
     return `<tr data-id="${v.id}" class="${v.status === "Baixada" ? "baixada" : ""}">
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
-      <td>${admin ? `<input type="number" class="kmin" data-id="${v.id}" min="0" value="${v.km ?? 0}" aria-label="KM atual">` : fmtKm(v.km)}</td>
+      <td>${admin ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}</td>
       <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}</td>
       <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
@@ -343,7 +343,7 @@ function montarCampos() {
     if (grupo) html += `<h3>${grupo}</h3>`;
     const ctl = tipo === "select"
       ? `<select id="f_${c}" required>${STATUS.map(s => `<option>${s}</option>`).join("")}</select>`
-      : `<input id="f_${c}" type="${tipo}" ${tipo === "number" ? 'min="0"' : tipo === "date" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""}>`;
+      : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""}>`;
     html += `<div><label for="f_${c}">${rot}</label>${ctl}</div>`;
   });
   $("campos").innerHTML = html;
@@ -352,7 +352,7 @@ function montarCampos() {
 function abrirForm(v) {
   editando = v ? v.id : null;
   $("formTitulo").textContent = v ? `${admin ? "Editar" : "Detalhes de"} ${v.prefixo} / ${v.placa}` : "Nova viatura";
-  CAMPOS.forEach(([c]) => { const el = $("f_" + c); el.value = v?.[c] ?? (c === "status" ? "Disponível" : c === "km" ? 0 : ""); el.disabled = !admin; });
+  CAMPOS.forEach(([c]) => { const el = $("f_" + c); el.value = v?.[c] ?? (c === "status" ? "Disponível" : c === "km" ? 0 : ""); if (el.classList.contains("milhar") && el.value !== "") el.value = Number(el.value).toLocaleString("pt-BR"); el.disabled = !admin; });
   $("formRodape").children[0].hidden = !admin;
   $("dlgForm").showModal();
 }
@@ -363,6 +363,7 @@ $("form").addEventListener("submit", async e => {
   const o = {};
   for (const [c, , tipo] of CAMPOS) {
     let val = $("f_" + c).value.trim();
+    if (tipo === "number") val = val.replace(/\D/g, "");
     if (MAIUSC.includes(c)) val = val.toLocaleUpperCase("pt-BR");
     o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
@@ -399,7 +400,7 @@ function sairEdicaoHist() {
   $("hSalvar").textContent = "Registrar manutenção"; $("hCancelar").hidden = true;
   $("formHist").reset();
   montarAuto(); $("hAuto").hidden = false;
-  const v = frota.find(x => x.id === histId); $("hKm").value = v?.km ?? "";
+  const v = frota.find(x => x.id === histId); $("hKm").value = v?.km != null ? Number(v.km).toLocaleString("pt-BR") : "";
   atualizarPrevia();
 }
 
@@ -423,7 +424,7 @@ function lerIntervalos() { try { return JSON.parse(localStorage.getItem("interva
 
 function salvarIntervalos() {
   const o = { meses: $("i_meses").value };
-  SERVICOS.forEach(([k]) => o[k] = $("i_" + k).value);
+  SERVICOS.forEach(([k]) => o[k] = $("i_" + k).value.replace(/\D/g, ""));
   try { localStorage.setItem("intervalosManut", JSON.stringify(o)); } catch {}
 }
 
@@ -431,15 +432,15 @@ function montarAuto() {
   const g = lerIntervalos();
   $("hAutoCampos").innerHTML = SERVICOS.map(([k, nome, , pad]) =>
     `<div><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="a_${k}" style="width:auto"> ${nome}</label>
-     <input type="number" id="i_${k}" min="1" value="${g[k] || pad}" placeholder="Intervalo em km" aria-label="Intervalo de ${nome} em km"></div>`).join("")
+     <input type="text" inputmode="numeric" class="milhar" id="i_${k}" value="${Number(g[k] || pad).toLocaleString("pt-BR")}" placeholder="Intervalo em km" aria-label="Intervalo de ${nome} em km"></div>`).join("")
     + `<div><label for="i_meses">Prazo do óleo em meses (0 = só por KM)</label><input type="number" id="i_meses" min="0" value="${g.meses ?? 6}"></div>`;
 }
 
 function calcProximas() {
-  const data = $("hData").value, kmTxt = $("hKm").value, km = Number(kmTxt), r = {};
+  const data = $("hData").value, kmTxt = $("hKm").value.replace(/\D/g, ""), km = Number(kmTxt), r = {};
   if (!data || kmTxt === "" || !Number.isFinite(km)) return r;
   SERVICOS.forEach(([k, , col]) => {
-    const iv = Number($("i_" + k).value);
+    const iv = Number($("i_" + k).value.replace(/\D/g, ""));
     if ($("a_" + k).checked && iv > 0) r[col] = km + iv;
   });
   const meses = Number($("i_meses").value);
@@ -481,7 +482,7 @@ async function listarHist() {
 
 $("formHist").addEventListener("submit", async e => {
   e.preventDefault();
-  const reg = { viatura_id: histId, data: $("hData").value, km: Number($("hKm").value), descricao: $("hDesc").value.trim(),
+  const reg = { viatura_id: histId, data: $("hData").value, km: Number($("hKm").value.replace(/\D/g, "")), descricao: $("hDesc").value.trim(),
     oficina: $("hOficina").value.trim() || null, valor: $("hValor").value === "" ? null : Number($("hValor").value) };
   const { error } = histEdit
     ? await sb.from("manutencoes").update({ data: reg.data, km: reg.km, descricao: reg.descricao, oficina: reg.oficina, valor: reg.valor }).eq("id", histEdit)
@@ -507,7 +508,7 @@ $("histLista").addEventListener("click", async e => {
   if (e.target.dataset.edit) {
     const r = histRows.find(x => x.id === Number(e.target.dataset.edit)); if (!r) return;
     histEdit = r.id; $("hAuto").hidden = true;
-    $("hData").value = r.data; $("hKm").value = r.km; $("hOficina").value = r.oficina ?? "";
+    $("hData").value = r.data; $("hKm").value = Number(r.km).toLocaleString("pt-BR"); $("hOficina").value = r.oficina ?? "";
     $("hValor").value = r.valor ?? ""; $("hDesc").value = r.descricao;
     $("hSalvar").textContent = "Salvar alterações"; $("hCancelar").hidden = false;
     $("dlgHist").scrollTo({ top: 0, behavior: "smooth" }); $("hData").focus();
@@ -539,8 +540,8 @@ $("lista").addEventListener("click", e => {
 $("lista").addEventListener("change", async e => {
   const ki = e.target.closest(".kmin");
   if (ki) {
-    const v = frota.find(x => x.id === Number(ki.dataset.id)), novo = Number(ki.value);
-    if (ki.value === "" || !Number.isFinite(novo) || novo < 0) { aviso("Informe um KM válido.", true); return render(); }
+    const dig = ki.value.replace(/\D/g, ""), v = frota.find(x => x.id === Number(ki.dataset.id)), novo = Number(dig);
+    if (dig === "" || !Number.isFinite(novo)) { aviso("Informe um KM válido.", true); return render(); }
     if (novo < Number(v.km) && !confirm(`O KM digitado (${fmtKm(novo)}) é menor que o atual (${fmtKm(v.km)}). Confirmar mesmo assim?`)) return render();
     const { data, error } = await sb.from("frota").update({ km: novo }).eq("id", v.id).select().single();
     if (error) { aviso(msgErro(error), true); return render(); }
@@ -762,6 +763,16 @@ $("repLista").addEventListener("click", async e => {
     if (error) return aviso(msgErro(error), true);
     await recarregarReparos();
   }
+});
+
+// pontos de milhar enquanto digita (KM na tabela, em Editar, no Histórico e nos intervalos)
+document.addEventListener("input", e => {
+  const el = e.target.closest?.(".kmin, .milhar"); if (!el) return;
+  const antes = el.value.slice(0, el.selectionStart).replace(/\D/g, "").length, d = el.value.replace(/\D/g, "");
+  el.value = d ? Number(d).toLocaleString("pt-BR") : "";
+  let n = 0, i = 0;
+  while (i < el.value.length && n < antes) { if (/\d/.test(el.value[i])) n++; i++; }
+  el.setSelectionRange(i, i);
 });
 
 $("btnNova").onclick = () => abrirForm(null);
