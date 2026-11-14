@@ -41,6 +41,10 @@ tr.baixada td:not(.acoes):not(.st){opacity:.65}
 .obs{width:100%;min-width:190px;min-height:48px;padding:6px 8px;border:1px solid var(--borda);border-radius:6px;font:inherit;resize:vertical;background:#fff}
 .pref{background:none;color:var(--azul2);padding:0;font-weight:700;font-size:inherit;text-decoration:underline;cursor:pointer}
 .pref:hover{filter:none;color:var(--azul)}
+td.acoes button[data-a="dados"]{background:#1f8a4c;color:#fff}
+td.acoes button[data-a="rep"]{background:#c95a00;color:#fff}
+td.acoes button[data-a="rep"].pend{font-weight:700;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--verm)}
+td.acoes button[data-a="ver"]{background:#f2b53a;color:#3d2c00}
 .kmin{width:96px;padding:5px 6px}
 th.ord{cursor:pointer;user-select:none}th.ord::after{content:attr(data-seta)}
 #ficha{display:none}.fx{width:100%;border-collapse:collapse;margin-bottom:12px;min-width:0!important}
@@ -162,6 +166,20 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <div class="hist" id="usrRes" style="max-height:60vh"></div>
 </dialog>
 
+<dialog id="dlgRep">
+  <div class="cab"><h2 id="repTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
+  <form id="formRep" class="so-admin" hidden>
+    <label for="rDesc">Reparo a fazer</label>
+    <input id="rDesc" placeholder="Ex.: trocar pastilhas de freio" maxlength="300" required>
+    <div class="grade">
+      <div><label for="rPrio">Prioridade</label><select id="rPrio"><option>Normal</option><option>Urgente</option></select></div>
+      <div><label for="rPrazo">Prazo (opcional)</label><input type="date" id="rPrazo" min="2000-01-01" max="2100-12-31"></div>
+    </div>
+    <div class="rodape"><button type="submit" class="ok">Adicionar reparo</button></div>
+  </form>
+  <div id="repLista" style="margin-top:14px;max-height:50vh;overflow:auto"></div>
+</dialog>
+
 <dialog id="dlgDados">
   <form id="formDados">
     <div class="cab"><h2 id="dadosTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
@@ -207,7 +225,7 @@ const CAMPOS = [
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Baixada"];
 
-let admin = false, frota = [], editando = null, histId = null, histRows = [], histEdit = null;
+let admin = false, frota = [], reparos = [], editando = null, histId = null, histRows = [], histEdit = null;
 
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtKm = v => v == null ? "-" : Number(v).toLocaleString("pt-BR");
@@ -252,6 +270,11 @@ function alertas(v) {
     if (d < 0) a.push(["v", `Óleo vencido há ${-d} dia(s)`]);
     else if (d <= LIMITE_DIAS) a.push(["p", d === 0 ? "Óleo vence hoje" : `Óleo em ${d} dia(s)`]);
   }
+  const rp = reparos.filter(r => r.viatura_id === v.id);
+  if (rp.length) {
+    const grave = rp.some(r => r.prioridade === "Urgente" || (r.prazo && dias(r.prazo) < 0));
+    a.push([grave ? "v" : "p", `${rp.length} reparo(s) pendente(s)${grave ? " – urgente/atrasado" : ""}`]);
+  }
   [["venc_licenciamento","Licenciamento"],["venc_seguro","Seguro"],["venc_ipva","IPVA"],["venc_vistoria","Vistoria"]].forEach(([c, nome]) => {
     if (!v[c]) return;
     const d = dias(v[c]);
@@ -272,7 +295,10 @@ function alertas(v) {
 async function carregar() {
   const { data, error } = await sb.from("frota").select("*").order("prefixo");
   if (error) { aviso(msgErro(error), true); return; }
-  frota = data; render();
+  frota = data;
+  const r = await sb.from("reparos").select("*").eq("concluido", false).order("criado_em");
+  if (r.error) aviso(msgErro(r.error), true); else reparos = r.data;
+  render();
 }
 
 function filtradas() {
@@ -294,7 +320,7 @@ function render() {
     + `<div class="a"><b>${comAlerta}</b>Com alertas</div>`;
   const lista = filtradas();
   $("lista").innerHTML = lista.length ? lista.map(v => {
-    const al = alertas(v);
+    const al = alertas(v), nrep = reparos.filter(r => r.viatura_id === v.id).length;
     return `<tr data-id="${v.id}" class="${v.status === "Baixada" ? "baixada" : ""}">
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
@@ -304,7 +330,7 @@ function render() {
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
       <td>${al.map(([t, m]) => `<span class="chip ${t}">${esc(m)}</span>`).join("") || "<small>Em dia</small>"}</td>
       <td>${admin ? `<textarea class="obs" data-id="${v.id}" rows="2" maxlength="500" placeholder="Adicionar observação" aria-label="Observações">${esc(v.observacao)}</textarea>` : esc(v.observacao) || "-"}</td>
-      <td class="acoes"><button data-a="hist">Histórico</button> <button class="sec" data-a="dados">Dados</button>
+      <td class="acoes"><button data-a="hist">Histórico</button> <button class="sec" data-a="dados">Dados</button> <button class="${nrep ? "pend" : ""}" data-a="rep">Reparos${nrep ? ` (${nrep})` : ""}</button>
         <button class="sec" data-a="ver">${admin ? "Editar" : "Detalhes"}</button>
         ${admin ? '<button class="perigo" data-a="del">Excluir</button>' : ""}</td></tr>`;
   }).join("") : `<tr><td colspan="9" class="vazio">Nenhuma viatura encontrada.${admin ? " Use “Nova viatura” para cadastrar." : ""}</td></tr>`;
@@ -508,7 +534,7 @@ $("btnCsv").onclick = () => {
 $("lista").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   const v = frota.find(x => x.id === Number(b.closest("tr").dataset.id));
-  if (b.dataset.a === "hist") abrirHist(v); else if (b.dataset.a === "dados") abrirDados(v); else if (b.dataset.a === "ver") abrirForm(v); else if (b.dataset.a === "del") excluir(v);
+  if (b.dataset.a === "hist") abrirHist(v); else if (b.dataset.a === "dados") abrirDados(v); else if (b.dataset.a === "rep") abrirReparos(v); else if (b.dataset.a === "ver") abrirForm(v); else if (b.dataset.a === "del") excluir(v);
 });
 $("lista").addEventListener("change", async e => {
   const ki = e.target.closest(".kmin");
@@ -657,13 +683,13 @@ async function abrirLog() {
   $("dlgLog").showModal(); $("logRes").textContent = "Carregando...";
   const { data, error } = await sb.from("log_alteracoes").select("*").order("id", { ascending: false }).limit(200);
   if (error) { $("logRes").textContent = ""; return aviso(msgErro(error), true); }
-  const ROT = Object.fromEntries(CAMPOS.map(([c, r]) => [c, r]));
+  const ROT = { concluido: "Concluído", concluido_em: "Concluído em", prioridade: "Prioridade", prazo: "Prazo", descricao: "Descrição", ...Object.fromEntries(CAMPOS.map(([c, r]) => [c, r])) };
   const fv = x => x == null || x === "" ? "vazio" : String(x);
   const linhas = data.map(l => {
     const a = l.antes || {}, d = l.depois || {}, base = l.depois || l.antes || {};
     let item, mud;
     if (l.tabela === "frota") item = `${base.prefixo || ""} / ${base.placa || ""}`;
-    else { const v = frota.find(f => f.id === base.viatura_id); item = `Manutenção · ${v ? v.prefixo : "viatura " + base.viatura_id}`; }
+    else { const v = frota.find(f => f.id === base.viatura_id); item = `${l.tabela === "reparos" ? "Reparo" : "Manutenção"} · ${v ? v.prefixo : "viatura " + base.viatura_id}`; }
     if (l.acao === "INSERT") mud = l.tabela === "frota" ? "Cadastrada" : "Registrada: " + esc(base.descricao || "");
     else if (l.acao === "DELETE") mud = "Excluído" + (l.tabela === "manutencoes" ? ": " + esc(base.descricao || "") : "");
     else mud = Object.keys(d).filter(k => k !== "criado_em" && JSON.stringify(a[k]) !== JSON.stringify(d[k]))
@@ -693,6 +719,50 @@ $("usrRes").addEventListener("change", async e => {
   aviso("Perfil atualizado.");
 });
 $("btnUsr").onclick = abrirUsuarios;
+
+// ---------- Reparos a fazer ----------
+let repId = null;
+async function abrirReparos(v) {
+  repId = v.id;
+  $("repTitulo").textContent = `Reparos a fazer — ${v.prefixo} / ${v.placa}`;
+  $("formRep").reset();
+  $("dlgRep").showModal(); await listarReparos();
+}
+async function listarReparos() {
+  const { data, error } = await sb.from("reparos").select("*").eq("viatura_id", repId).order("criado_em", { ascending: false });
+  if (error) return aviso(msgErro(error), true);
+  const pend = data.filter(r => !r.concluido), feitos = data.filter(r => r.concluido).slice(0, 10);
+  const dt = x => new Date(x).toLocaleDateString("pt-BR");
+  const prazo = r => r.prazo ? `<br><small${dias(r.prazo) < 0 ? ' style="color:var(--verm);font-weight:700"' : ""}>Prazo: ${fmtData(r.prazo)}${dias(r.prazo) < 0 ? " (atrasado)" : ""}</small>` : "";
+  $("repLista").innerHTML = (pend.length
+    ? `<table style="min-width:0"><tbody>${pend.map(r => `<tr><td>${r.prioridade === "Urgente" ? '<span class="chip v">Urgente</span> ' : ""}${esc(r.descricao)}${prazo(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td>
+      <td class="acoes">${admin ? `<button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
+    : "<p>Nenhum reparo pendente.</p>")
+    + (feitos.length ? `<h3>Concluídos</h3><table style="min-width:0"><tbody>${feitos.map(r => `<tr><td>${esc(r.descricao)}<br><small>Concluído em ${dt(r.concluido_em)}</small></td></tr>`).join("")}</tbody></table>` : "");
+}
+async function recarregarReparos() {
+  const r = await sb.from("reparos").select("*").eq("concluido", false);
+  if (!r.error) reparos = r.data;
+  render(); await listarReparos();
+}
+$("formRep").addEventListener("submit", async e => {
+  e.preventDefault(); if (!admin) return;
+  const { error } = await sb.from("reparos").insert({ viatura_id: repId, descricao: $("rDesc").value.trim(), prioridade: $("rPrio").value, prazo: $("rPrazo").value || null });
+  if (error) return aviso(msgErro(error), true);
+  $("formRep").reset(); await recarregarReparos(); aviso("Reparo registrado. A viatura agora tem um alerta.");
+});
+$("repLista").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b || !admin) return;
+  if (b.dataset.concluir) {
+    const { error } = await sb.from("reparos").update({ concluido: true, concluido_em: new Date().toISOString() }).eq("id", Number(b.dataset.concluir));
+    if (error) return aviso(msgErro(error), true);
+    await recarregarReparos(); aviso("Reparo concluído.");
+  } else if (b.dataset.apagar && confirm("Excluir este reparo?")) {
+    const { error } = await sb.from("reparos").delete().eq("id", Number(b.dataset.apagar));
+    if (error) return aviso(msgErro(error), true);
+    await recarregarReparos();
+  }
+});
 
 $("btnNova").onclick = () => abrirForm(null);
 $("hCancelar").onclick = () => sairEdicaoHist();
