@@ -1,23 +1,3 @@
-Claude
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Index · HTML
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -88,7 +68,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
- 
+
 <form id="login">
   <h1>Controle de Viaturas</h1>
   <small>Entre com seu e-mail e senha.</small>
@@ -99,12 +79,14 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <button type="submit" id="btnEntrar" style="width:100%;margin-top:14px">Entrar</button>
   <p id="erroLogin" role="alert" hidden></p>
 </form>
- 
+
 <div id="app" hidden>
 <header>
   <img src="logo-viaturas-fundo-transparente.png" alt="" onerror="this.remove()">
   <h1>Controle de Manutenção de Viaturas <small id="perfilTxt"></small></h1>
   <button class="sec" id="btnCustos">Custos</button>
+  <button class="sec so-admin" id="btnLog" hidden>Alterações</button>
+  <button class="sec so-admin" id="btnUsr" hidden>Usuários</button>
   <button class="sec so-admin" id="btnBackup" hidden>Backup</button>
   <button class="sec" id="btnCsv">Exportar planilha</button>
   <button class="sec" id="btnSair">Sair</button>
@@ -126,7 +108,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   </table></div>
 </main>
 </div>
- 
+
 <dialog id="dlgForm">
   <form id="form">
     <div class="cab"><h2 id="formTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
@@ -137,7 +119,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
     </div>
   </form>
 </dialog>
- 
+
 <dialog id="dlgHist">
   <div class="cab"><h2 id="histTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
   <form id="formHist" class="so-admin" hidden>
@@ -160,14 +142,26 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <p id="histTotal" style="margin:14px 0 0;font-weight:600"></p>
   <div class="hist" id="histLista"></div>
 </dialog>
- 
+
 <dialog id="dlgCustos">
   <div class="cab"><h2>Custos de manutenção</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
   <div class="grade"><div><label for="cDe">De</label><input type="date" id="cDe"></div><div><label for="cAte">Até</label><input type="date" id="cAte"></div></div>
   <div class="rodape"><button type="button" id="cGerar">Atualizar</button></div>
   <div id="custosRes"></div>
 </dialog>
- 
+
+<dialog id="dlgLog" style="width:min(980px,calc(100% - 24px))">
+  <div class="cab"><h2>Histórico de alterações</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
+  <p><small>Últimas 200 alterações, a partir da ativação do registro.</small></p>
+  <div class="hist" id="logRes" style="max-height:65vh"></div>
+</dialog>
+
+<dialog id="dlgUsr">
+  <div class="cab"><h2>Usuários e permissões</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
+  <p><small>Para criar um usuário novo: painel do Supabase &gt; Authentication &gt; Users &gt; Add user. Depois ele aparece aqui como “Consulta”.</small></p>
+  <div class="hist" id="usrRes" style="max-height:60vh"></div>
+</dialog>
+
 <dialog id="dlgDados">
   <form id="formDados">
     <div class="cab"><h2 id="dadosTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
@@ -178,11 +172,14 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
       <button type="button" class="sec" data-fechar>Cancelar</button>
     </div>
   </form>
+  <h3 style="margin:18px 0 6px;color:var(--azul2)">Documentos e fotos</h3>
+  <div class="so-admin" id="docsAdmin" hidden><input type="file" id="docArq" multiple><small>Até 10 MB por arquivo (CRLV, seguro, fotos, etc.).</small></div>
+  <div class="hist" id="docsLista"></div>
 </dialog>
- 
+
 <div id="ficha"></div>
 <div id="aviso" popover="manual" role="status"></div>
- 
+
 <script>
 if (typeof supabase === "undefined") {
   const e = document.getElementById("erroLogin");
@@ -193,7 +190,7 @@ if (typeof supabase === "undefined") {
 const sb = supabase.createClient("https://jxtivpcduhomnnqpukaj.supabase.co", "sb_publishable_lJTNW-tGjLGPEZdkqY3q6w_R2OqNerz");
 const $ = id => document.getElementById(id);
 const LIMITE_KM = 500, LIMITE_DIAS = 30;
- 
+
 // [campo, rótulo, tipo, grupo]
 const CAMPOS = [
   ["prefixo","Prefixo","text","Identificação"],["placa","Placa","text"],["marca","Marca","text"],["modelo","Modelo","text"],
@@ -209,14 +206,14 @@ const CAMPOS = [
 ];
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Baixada"];
- 
+
 let admin = false, frota = [], editando = null, histId = null, histRows = [], histEdit = null;
- 
+
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtKm = v => v == null ? "-" : Number(v).toLocaleString("pt-BR");
 const fmtData = d => d ? d.split("-").reverse().join("/") : "-";
 const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
- 
+
 function aviso(msg, erro) {
   const a = $("aviso"); a.textContent = msg; a.className = erro ? "erro" : "";
   if (a.matches(":popover-open")) a.hidePopover();
@@ -231,13 +228,13 @@ function msgErro(e) {
   if (/row-level security/i.test(m)) return "Sem permissão: apenas administradores podem alterar dados.";
   return "Erro: " + m;
 }
- 
+
 // ---------- Alertas ----------
 function dias(iso) {
   const h = new Date(); h.setHours(0, 0, 0, 0);
   return Math.round((new Date(iso + "T00:00:00") - h) / 864e5);
 }
- 
+
 let ordem = { c: "prefixo", d: 1 };
 const valorOrd = (v, c) => { if (c !== "alertas") return v[c]; const a = alertas(v); return a.filter(x => x[0] === "v").length * 100 + a.length; };
 const cmp = (a, b) => {
@@ -245,7 +242,7 @@ const cmp = (a, b) => {
   if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
   return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "pt-BR", { numeric: true })) * ordem.d;
 };
- 
+
 function alertas(v) {
   if (v.status === "Baixada") return [];
   const a = [];
@@ -270,21 +267,21 @@ function alertas(v) {
     });
   return a;
 }
- 
+
 // ---------- Dados ----------
 async function carregar() {
   const { data, error } = await sb.from("frota").select("*").order("prefixo");
   if (error) { aviso(msgErro(error), true); return; }
   frota = data; render();
 }
- 
+
 function filtradas() {
   const q = norm($("busca").value.trim()), st = $("fStatus").value, em = $("fEmprego").value, so = $("fAlerta").checked;
   return frota.filter(v =>
     (!q || norm([v.prefixo, v.placa, v.marca, v.modelo, v.emprego, v.status, v.observacao].join(" ")).includes(q)) &&
     (!st || v.status === st) && (!em || v.emprego === em) && (!so || alertas(v).length)).sort(cmp);
 }
- 
+
 function render() {
   const sel = $("fEmprego"), atual = sel.value;
   const emps = [...new Set(frota.map(v => v.emprego).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -312,7 +309,7 @@ function render() {
         ${admin ? '<button class="perigo" data-a="del">Excluir</button>' : ""}</td></tr>`;
   }).join("") : `<tr><td colspan="9" class="vazio">Nenhuma viatura encontrada.${admin ? " Use “Nova viatura” para cadastrar." : ""}</td></tr>`;
 }
- 
+
 // ---------- Formulário da viatura ----------
 function montarCampos() {
   let html = "";
@@ -325,7 +322,7 @@ function montarCampos() {
   });
   $("campos").innerHTML = html;
 }
- 
+
 function abrirForm(v) {
   editando = v ? v.id : null;
   $("formTitulo").textContent = v ? `${admin ? "Editar" : "Detalhes de"} ${v.prefixo} / ${v.placa}` : "Nova viatura";
@@ -333,7 +330,7 @@ function abrirForm(v) {
   $("formRodape").children[0].hidden = !admin;
   $("dlgForm").showModal();
 }
- 
+
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   if (!admin) return;
@@ -355,14 +352,14 @@ $("form").addEventListener("submit", async e => {
   frota.sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
   $("dlgForm").close(); render(); aviso("Viatura salva.");
 });
- 
+
 async function excluir(v) {
   if (!confirm(`Excluir a viatura ${v.prefixo} / ${v.placa} e todo o seu histórico de manutenção?`)) return;
   const { error } = await sb.from("frota").delete().eq("id", v.id);
   if (error) return aviso(msgErro(error), true);
   frota = frota.filter(x => x.id !== v.id); render(); aviso("Viatura excluída.");
 }
- 
+
 // ---------- Histórico de manutenção ----------
 async function abrirHist(v) {
   histId = v.id;
@@ -370,7 +367,7 @@ async function abrirHist(v) {
   sairEdicaoHist();
   $("dlgHist").showModal(); await listarHist();
 }
- 
+
 function sairEdicaoHist() {
   histEdit = null;
   $("hSalvar").textContent = "Registrar manutenção"; $("hCancelar").hidden = true;
@@ -379,7 +376,7 @@ function sairEdicaoHist() {
   const v = frota.find(x => x.id === histId); $("hKm").value = v?.km ?? "";
   atualizarPrevia();
 }
- 
+
 // ---------- Próximas trocas automáticas ----------
 const SERVICOS = [
   ["oleo", "Troca de óleo", "km_troca_oleo", 10000],
@@ -387,7 +384,7 @@ const SERVICOS = [
   ["filtro_comb", "Filtro de combustível", "km_filtro_combustivel", 20000],
   ["filtro_ar", "Filtro de ar", "km_filtro_ar", 20000]
 ];
- 
+
 function somarMeses(iso, n) {
   const [a, m, d] = iso.split("-").map(Number);
   const dt = new Date(a, m - 1 + n, 1);
@@ -395,15 +392,15 @@ function somarMeses(iso, n) {
   dt.setDate(Math.min(d, ultimo));
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
- 
+
 function lerIntervalos() { try { return JSON.parse(localStorage.getItem("intervalosManut")) || {}; } catch { return {}; } }
- 
+
 function salvarIntervalos() {
   const o = { meses: $("i_meses").value };
   SERVICOS.forEach(([k]) => o[k] = $("i_" + k).value);
   try { localStorage.setItem("intervalosManut", JSON.stringify(o)); } catch {}
 }
- 
+
 function montarAuto() {
   const g = lerIntervalos();
   $("hAutoCampos").innerHTML = SERVICOS.map(([k, nome, , pad]) =>
@@ -411,7 +408,7 @@ function montarAuto() {
      <input type="number" id="i_${k}" min="1" value="${g[k] || pad}" placeholder="Intervalo em km" aria-label="Intervalo de ${nome} em km"></div>`).join("")
     + `<div><label for="i_meses">Prazo do óleo em meses (0 = só por KM)</label><input type="number" id="i_meses" min="0" value="${g.meses ?? 6}"></div>`;
 }
- 
+
 function calcProximas() {
   const data = $("hData").value, kmTxt = $("hKm").value, km = Number(kmTxt), r = {};
   if (!data || kmTxt === "" || !Number.isFinite(km)) return r;
@@ -423,7 +420,7 @@ function calcProximas() {
   if ($("a_oleo").checked && meses > 0) r.troca_oleo = somarMeses(data, meses);
   return r;
 }
- 
+
 function atualizarPrevia() {
   const r = calcProximas(), p = [];
   SERVICOS.forEach(([k, nome, col]) => {
@@ -432,7 +429,7 @@ function atualizarPrevia() {
   $("hAutoPrevia").textContent = p.length ? "Próximas trocas: " + p.join(" · ") : "Informe data e KM e marque o que foi feito para calcular.";
   salvarIntervalos();
 }
- 
+
 function marcarPorDescricao() {
   const t = $("hDesc").value.toLowerCase();
   if (!/troc|substitu/.test(t)) return; // só sugere quando o texto fala em troca/substituição
@@ -442,7 +439,7 @@ function marcarPorDescricao() {
   marcar("filtro_comb", /combust/.test(t));
   marcar("filtro_ar", /filtro.*\bar\b|\bar\b.*filtro/.test(t));
 }
- 
+
 async function listarHist() {
   const { data, error } = await sb.from("manutencoes").select("*").eq("viatura_id", histId).order("data", { ascending: false });
   if (error) { $("histLista").innerHTML = ""; return aviso(msgErro(error), true); }
@@ -455,7 +452,7 @@ async function listarHist() {
      ${admin ? `<td class="acoes"><button class="sec" data-edit="${r.id}">Editar</button> <button class="perigo" data-del="${r.id}">Excluir</button></td>` : ""}</tr>`).join("")}</tbody></table>`
     : "<p>Nenhuma manutenção registrada.</p>";
 }
- 
+
 $("formHist").addEventListener("submit", async e => {
   e.preventDefault();
   const reg = { viatura_id: histId, data: $("hData").value, km: Number($("hKm").value), descricao: $("hDesc").value.trim(),
@@ -479,7 +476,7 @@ $("formHist").addEventListener("submit", async e => {
   sairEdicaoHist();
   await listarHist(); aviso(editou ? "Manutenção atualizada." : Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
 });
- 
+
 $("histLista").addEventListener("click", async e => {
   if (e.target.dataset.edit) {
     const r = histRows.find(x => x.id === Number(e.target.dataset.edit)); if (!r) return;
@@ -496,7 +493,7 @@ $("histLista").addEventListener("click", async e => {
   if (Number(id) === histEdit) sairEdicaoHist();
   await listarHist();
 });
- 
+
 // ---------- Exportar ----------
 $("btnCsv").onclick = () => {
   const cols = CAMPOS.map(c => c[0]), cab = CAMPOS.map(c => c[1]);
@@ -506,7 +503,7 @@ $("btnCsv").onclick = () => {
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   a.download = `viaturas-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
 };
- 
+
 // ---------- Eventos da tela ----------
 $("lista").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
@@ -537,15 +534,16 @@ $("lista").addEventListener("change", async e => {
 // ---------- Dados técnicos ----------
 const TECNICOS = CAMPOS.slice(-7);
 let dadosId = null;
- 
+
 function abrirDados(v) {
   dadosId = v.id;
   $("dadosTitulo").textContent = `Dados técnicos — ${v.prefixo} / ${v.placa}`;
   TECNICOS.forEach(([c]) => { const el = $("d_" + c); el.value = v[c] ?? ""; el.disabled = !admin; });
   $("dadosSalvar").hidden = !admin;
+  listarDocs();
   $("dlgDados").showModal();
 }
- 
+
 $("formDados").addEventListener("submit", async e => {
   e.preventDefault(); if (!admin) return;
   const o = {};
@@ -559,14 +557,14 @@ $("formDados").addEventListener("submit", async e => {
   frota[frota.findIndex(v => v.id === data.id)] = data;
   $("dlgDados").close(); render(); aviso("Dados técnicos salvos.");
 });
- 
+
 document.querySelector("thead").addEventListener("click", e => {
   const t = e.target.closest("th[data-ord]"); if (!t) return;
   const c = t.dataset.ord;
   ordem = { c, d: ordem.c === c ? -ordem.d : (c === "alertas" || c === "km" ? -1 : 1) };
   render();
 });
- 
+
 // ---------- Custos ----------
 const brl = x => Number(x).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 async function abrirCustos() {
@@ -596,7 +594,7 @@ async function gerarCustos() {
 }
 $("btnCustos").onclick = abrirCustos;
 $("cGerar").onclick = gerarCustos;
- 
+
 // ---------- Ficha para impressão / PDF ----------
 async function imprimirFicha() {
   const v = frota.find(x => x.id === dadosId); if (!v) return;
@@ -609,7 +607,7 @@ async function imprimirFicha() {
   window.print();
 }
 $("btnFicha").onclick = imprimirFicha;
- 
+
 // ---------- Backup ----------
 $("btnBackup").onclick = async () => {
   const { data: m, error } = await sb.from("manutencoes").select("*").order("id");
@@ -618,7 +616,84 @@ $("btnBackup").onclick = async () => {
   a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota, manutencoes: m }, null, 1)], { type: "application/json" }));
   a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
 };
- 
+
+// ---------- Documentos e fotos ----------
+const BUCKET = "documentos";
+async function listarDocs() {
+  const { data, error } = await sb.storage.from(BUCKET).list(`viatura_${dadosId}`, { sortBy: { column: "created_at", order: "desc" } });
+  if (error) { $("docsLista").innerHTML = ""; return aviso(msgErro(error), true); }
+  const arq = data.filter(f => f.name !== ".emptyFolderPlaceholder");
+  $("docsLista").innerHTML = arq.length
+    ? `<table style="min-width:0"><tbody>${arq.map(f => `<tr><td>${esc(f.name.replace(/^\d+_/, ""))}</td><td class="acoes"><button data-abrir="${esc(f.name)}">Abrir</button> ${admin ? `<button class="perigo" data-apagar="${esc(f.name)}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
+    : "<p>Nenhum arquivo anexado.</p>";
+}
+$("docArq").addEventListener("change", async e => {
+  let falhou = false;
+  for (const f of e.target.files) {
+    if (f.size > 10 * 1024 * 1024) { aviso(`${f.name}: maior que 10 MB.`, true); falhou = true; continue; }
+    const nome = f.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "_");
+    const { error } = await sb.storage.from(BUCKET).upload(`viatura_${dadosId}/${Date.now()}_${nome}`, f);
+    if (error) { aviso(msgErro(error), true); falhou = true; break; }
+  }
+  e.target.value = ""; await listarDocs();
+  if (!falhou) aviso("Arquivo(s) enviado(s).");
+});
+$("docsLista").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.abrir) {
+    const w = window.open("about:blank", "_blank");
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(`viatura_${dadosId}/${b.dataset.abrir}`, 300);
+    if (error || !data?.signedUrl) { w?.close(); return aviso(msgErro(error || "Não foi possível abrir o arquivo."), true); }
+    w.location.href = data.signedUrl;
+  } else if (b.dataset.apagar && confirm("Excluir este arquivo?")) {
+    const { error } = await sb.storage.from(BUCKET).remove([`viatura_${dadosId}/${b.dataset.apagar}`]);
+    if (error) return aviso(msgErro(error), true);
+    await listarDocs();
+  }
+});
+
+// ---------- Histórico de alterações ----------
+async function abrirLog() {
+  $("dlgLog").showModal(); $("logRes").textContent = "Carregando...";
+  const { data, error } = await sb.from("log_alteracoes").select("*").order("id", { ascending: false }).limit(200);
+  if (error) { $("logRes").textContent = ""; return aviso(msgErro(error), true); }
+  const ROT = Object.fromEntries(CAMPOS.map(([c, r]) => [c, r]));
+  const fv = x => x == null || x === "" ? "vazio" : String(x);
+  const linhas = data.map(l => {
+    const a = l.antes || {}, d = l.depois || {}, base = l.depois || l.antes || {};
+    let item, mud;
+    if (l.tabela === "frota") item = `${base.prefixo || ""} / ${base.placa || ""}`;
+    else { const v = frota.find(f => f.id === base.viatura_id); item = `Manutenção · ${v ? v.prefixo : "viatura " + base.viatura_id}`; }
+    if (l.acao === "INSERT") mud = l.tabela === "frota" ? "Cadastrada" : "Registrada: " + esc(base.descricao || "");
+    else if (l.acao === "DELETE") mud = "Excluído" + (l.tabela === "manutencoes" ? ": " + esc(base.descricao || "") : "");
+    else mud = Object.keys(d).filter(k => k !== "criado_em" && JSON.stringify(a[k]) !== JSON.stringify(d[k]))
+      .map(k => `${esc(ROT[k] || k)}: ${esc(fv(a[k]))} → ${esc(fv(d[k]))}`).join("<br>") || "-";
+    return `<tr><td>${new Date(l.criado_em).toLocaleString("pt-BR")}</td><td>${esc(l.usuario_email || "-")}</td><td>${esc(item)}</td><td>${mud}</td></tr>`;
+  });
+  $("logRes").innerHTML = linhas.length
+    ? `<table style="min-width:640px"><thead><tr><th>Quando</th><th>Quem</th><th>Item</th><th>O que mudou</th></tr></thead><tbody>${linhas.join("")}</tbody></table>`
+    : "<p>Nenhuma alteração registrada ainda.</p>";
+}
+$("btnLog").onclick = abrirLog;
+
+// ---------- Usuários e permissões ----------
+async function abrirUsuarios() {
+  $("dlgUsr").showModal(); $("usrRes").textContent = "Carregando...";
+  const { data, error } = await sb.rpc("listar_usuarios");
+  if (error) { $("usrRes").textContent = ""; return aviso(msgErro(error), true); }
+  $("usrRes").innerHTML = `<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u =>
+    `<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString("pt-BR") : "nunca"}</td>
+     <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${["admin", "consulta"].map(p =>
+       `<option value="${p}"${p === u.perfil ? " selected" : ""}>${p === "admin" ? "Administrador" : "Consulta"}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
+}
+$("usrRes").addEventListener("change", async e => {
+  const el = e.target.closest(".perfsel"); if (!el) return;
+  const { error } = await sb.rpc("definir_perfil", { uid: el.dataset.id, novo: el.value });
+  if (error) { aviso(msgErro(error), true); return abrirUsuarios(); }
+  aviso("Perfil atualizado.");
+});
+$("btnUsr").onclick = abrirUsuarios;
+
 $("btnNova").onclick = () => abrirForm(null);
 $("hCancelar").onclick = () => sairEdicaoHist();
 $("formHist").addEventListener("input", e => {
@@ -627,7 +702,7 @@ $("formHist").addEventListener("input", e => {
 });
 ["busca", "fStatus", "fEmprego", "fAlerta"].forEach(id => $(id).addEventListener("input", render));
 document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.closest("dialog").close());
- 
+
 // ---------- Login ----------
 async function entrar() {
   const { data: { user } } = await sb.auth.getUser();
@@ -638,7 +713,7 @@ async function entrar() {
   $("login").hidden = true; $("app").hidden = false;
   await carregar();
 }
- 
+
 $("login").addEventListener("submit", async e => {
   e.preventDefault();
   const btn = $("btnEntrar"), erro = $("erroLogin");
@@ -656,9 +731,9 @@ $("login").addEventListener("submit", async e => {
     erro.hidden = false;
   }
 });
- 
+
 $("btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
- 
+
 montarCampos();
 montarAuto();
 $("camposDados").innerHTML = TECNICOS.map(([c, rot]) => `<div><label for="d_${c}">${rot}</label><input id="d_${c}"${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`).join("");
@@ -666,5 +741,3 @@ sb.auth.getSession().then(({ data }) => { if (data.session) entrar(); });
 </script>
 </body>
 </html>
- 
-Claude terminou a resposta
