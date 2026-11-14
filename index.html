@@ -74,7 +74,6 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
-
 <form id="login">
   <h1>Controle de Viaturas</h1>
   <small>Entre com seu e-mail e senha.</small>
@@ -85,7 +84,6 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <button type="submit" id="btnEntrar" style="width:100%;margin-top:14px">Entrar</button>
   <p id="erroLogin" role="alert" hidden></p>
 </form>
-
 <div id="app" hidden>
 <header>
   <img src="logo-viaturas-fundo-transparente.png" alt="" onerror="this.remove()">
@@ -103,9 +101,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <section class="resumo" id="resumo"></section>
   <div class="barra">
     <input type="search" id="busca" placeholder="Pesquisar prefixo, placa, marca, modelo, emprego ou observação" aria-label="Pesquisar">
-    <select id="fStatus" aria-label="Filtrar por status">
-      <option value="">Todos os status</option><option>Disponível</option><option>Manutenção</option><option>Emprestada</option><option>Baixada</option>
-    </select>
+    <select id="fStatus" aria-label="Filtrar por status"><option value="">Todos os status</option><option>Disponível</option><option>Manutenção</option><option>Emprestada</option><option>Baixada</option></select>
     <select id="fEmprego" aria-label="Filtrar por emprego"><option value="">Todos os empregos</option></select>
     <label><input type="checkbox" id="fAlerta"> Só com alertas</label>
     <button class="ok so-admin" id="btnNova" hidden>Nova viatura</button>
@@ -116,791 +112,126 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   </table></div>
 </main>
 </div>
-
-<dialog id="dlgForm">
-  <form id="form">
-    <div class="cab"><h2 id="formTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-    <div class="grade" id="campos"></div>
-    <div class="rodape" id="formRodape">
-      <button type="submit" class="ok">Salvar</button>
-      <button type="button" class="sec" data-fechar>Cancelar</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog id="dlgHist">
-  <div class="cab"><h2 id="histTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-  <form id="formHist" class="so-admin" hidden>
-    <div class="grade">
-      <div><label for="hData">Data</label><input type="date" id="hData" min="2000-01-01" max="2100-12-31" required></div>
-      <div><label for="hKm">KM da viatura</label><input type="text" inputmode="numeric" class="milhar" id="hKm" required></div>
-      <div><label for="hOficina">Oficina/Responsável</label><input id="hOficina"></div>
-      <div><label for="hValor">Valor (R$)</label><input type="number" id="hValor" min="0" step="0.01"></div>
-    </div>
-    <label for="hDesc">Serviço realizado</label>
-    <input id="hDesc" placeholder="Ex.: troca de óleo e filtros" required>
-    <fieldset id="hAuto" style="border:1px solid var(--borda);border-radius:8px;margin:14px 0 0;padding:6px 12px 12px">
-      <legend style="font-size:12px;font-weight:700;color:var(--azul2);padding:0 6px">Calcular as próximas trocas automaticamente</legend>
-      <small>Marque o que foi feito e informe o intervalo (em km). Os valores ficam salvos para a próxima vez.</small>
-      <div class="grade" id="hAutoCampos"></div>
-      <p id="hAutoPrevia" style="margin:10px 0 0;font-weight:600;color:var(--azul2)"></p>
-    </fieldset>
-    <div class="rodape"><button type="submit" class="ok" id="hSalvar">Registrar manutenção</button><button type="button" class="sec" id="hCancelar" hidden>Cancelar edição</button></div>
-  </form>
-  <p id="histTotal" style="margin:14px 0 0;font-weight:600"></p>
-  <div class="hist" id="histLista"></div>
-</dialog>
-
-<dialog id="dlgCustos">
-  <div class="cab"><h2>Custos de manutenção</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-  <div class="grade"><div><label for="cDe">De</label><input type="date" id="cDe"></div><div><label for="cAte">Até</label><input type="date" id="cAte"></div></div>
-  <div class="rodape"><button type="button" id="cGerar">Atualizar</button></div>
-  <div id="custosRes"></div>
-</dialog>
-
-<dialog id="dlgLog" style="width:min(980px,calc(100% - 24px))">
-  <div class="cab"><h2>Histórico de alterações</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-  <p><small>Últimas 200 alterações, a partir da ativação do registro.</small></p>
-  <div class="hist" id="logRes" style="max-height:65vh"></div>
-</dialog>
-
-<dialog id="dlgUsr">
-  <div class="cab"><h2>Usuários e permissões</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-  <p><small>Para criar um usuário novo: painel do Supabase &gt; Authentication &gt; Users &gt; Add user. Depois ele aparece aqui como “Sem acesso”: escolha um perfil para liberar.</small></p>
-  <div class="hist" id="usrRes" style="max-height:60vh"></div>
-</dialog>
-
-<dialog id="dlgRep">
-  <div class="cab"><h2 id="repTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-  <form id="formRep" class="so-admin" hidden>
-    <label for="rDesc">Reparo a fazer</label>
-    <input id="rDesc" placeholder="Ex.: trocar pastilhas de freio" maxlength="300" required>
-    <div class="grade">
-      <div><label for="rPrio">Prioridade</label><select id="rPrio"><option>Normal</option><option>Urgente</option></select></div>
-      <div><label for="rPrazo">Prazo (opcional)</label><input type="date" id="rPrazo" min="2000-01-01" max="2100-12-31"></div>
-    </div>
-    <div class="rodape"><button type="submit" class="ok">Adicionar reparo</button></div>
-  </form>
-  <div id="repLista" style="margin-top:14px;max-height:50vh;overflow:auto"></div>
-</dialog>
-
-<dialog id="dlgDados">
-  <form id="formDados">
-    <div class="cab"><h2 id="dadosTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-    <div class="grade" id="camposDados"></div>
-    <div class="rodape">
-      <button type="submit" class="ok" id="dadosSalvar">Salvar dados</button>
-      <button type="button" class="sec" id="btnFicha">Imprimir ficha</button>
-      <button type="button" class="sec" data-fechar>Cancelar</button>
-    </div>
-  </form>
-  <h3 style="margin:18px 0 6px;color:var(--azul2)">Documentos e fotos</h3>
-  <div class="so-admin" id="docsAdmin" hidden><input type="file" id="docArq" multiple><small>Até 10 MB por arquivo (CRLV, seguro, fotos, etc.).</small></div>
-  <div class="hist" id="docsLista"></div>
-</dialog>
-
-<dialog id="dlgKm">
-  <div class="cab"><h2>Atualizar KM</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-  <input type="search" id="kmBusca" placeholder="Buscar prefixo, placa ou modelo" aria-label="Buscar viatura" style="margin-top:10px">
-  <div id="kmLista" style="max-height:65vh;overflow:auto;margin-top:8px"></div>
-</dialog>
+<dialog id="dlgForm"><form id="form"><div class="cab"><h2 id="formTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div><div class="grade" id="campos"></div><div class="rodape" id="formRodape"><button type="submit" class="ok">Salvar</button><button type="button" class="sec" data-fechar>Cancelar</button></div></form></dialog>
+<dialog id="dlgHist"><div class="cab"><h2 id="histTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div><form id="formHist" class="so-admin" hidden><div class="grade"><div><label for="hData">Data</label><input type="date" id="hData" min="2000-01-01" max="2100-12-31" required></div><div><label for="hKm">KM da viatura</label><input type="text" inputmode="numeric" class="milhar" id="hKm" required></div><div><label for="hOficina">Oficina/Responsável</label><input id="hOficina"></div><div><label for="hValor">Valor (R$)</label><input type="number" id="hValor" min="0" step="0.01"></div></div><label for="hDesc">Serviço realizado</label><input id="hDesc" placeholder="Ex.: troca de óleo e filtros" required><fieldset id="hAuto" style="border:1px solid var(--borda);border-radius:8px;margin:14px 0 0;padding:6px 12px 12px"><legend style="font-size:12px;font-weight:700;color:var(--azul2);padding:0 6px">Calcular as próximas trocas automaticamente</legend><small>Marque o que foi feito e informe o intervalo (em km). Os valores ficam salvos para a próxima vez.</small><div class="grade" id="hAutoCampos"></div><p id="hAutoPrevia" style="margin:10px 0 0;font-weight:600;color:var(--azul2)"></p></fieldset><div class="rodape"><button type="submit" class="ok" id="hSalvar">Registrar manutenção</button><button type="button" class="sec" id="hCancelar" hidden>Cancelar edição</button></div></form><p id="histTotal" style="margin:14px 0 0;font-weight:600"></p><div class="hist" id="histLista"></div></dialog>
+<dialog id="dlgCustos"><div class="cab"><h2>Custos de manutenção</h2><button type="button" class="sec" data-fechar>Fechar</button></div><div class="grade"><div><label for="cDe">De</label><input type="date" id="cDe"></div><div><label for="cAte">Até</label><input type="date" id="cAte"></div></div><div class="rodape"><button type="button" id="cGerar">Atualizar</button></div><div id="custosRes"></div></dialog>
+<dialog id="dlgLog" style="width:min(980px,calc(100% - 24px))"><div class="cab"><h2>Histórico de alterações</h2><button type="button" class="sec" data-fechar>Fechar</button></div><p><small>Últimas 200 alterações, a partir da ativação do registro.</small></p><div class="hist" id="logRes" style="max-height:65vh"></div></dialog>
+<dialog id="dlgUsr"><div class="cab"><h2>Usuários e permissões</h2><button type="button" class="sec" data-fechar>Fechar</button></div><p><small>Para criar um usuário novo: painel do Supabase &gt; Authentication &gt; Users &gt; Add user. Depois ele aparece aqui como “Sem acesso”: escolha um perfil para liberar.</small></p><div class="hist" id="usrRes" style="max-height:60vh"></div></dialog>
+<dialog id="dlgRep"><div class="cab"><h2 id="repTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div><form id="formRep" class="so-admin" hidden><label for="rDesc">Reparo a fazer</label><input id="rDesc" placeholder="Ex.: trocar pastilhas de freio" maxlength="300" required><div class="grade"><div><label for="rPrio">Prioridade</label><select id="rPrio"><option>Normal</option><option>Urgente</option></select></div><div><label for="rPrazo">Prazo (opcional)</label><input type="date" id="rPrazo" min="2000-01-01" max="2100-12-31"></div></div><div class="rodape"><button type="submit" class="ok">Adicionar reparo</button></div></form><div id="repLista" style="margin-top:14px;max-height:50vh;overflow:auto"></div></dialog>
+<dialog id="dlgDados"><form id="formDados"><div class="cab"><h2 id="dadosTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div><div class="grade" id="camposDados"></div><div class="rodape"><button type="submit" class="ok" id="dadosSalvar">Salvar dados</button><button type="button" class="sec" id="btnFicha">Imprimir ficha</button><button type="button" class="sec" data-fechar>Cancelar</button></div></form><h3 style="margin:18px 0 6px;color:var(--azul2)">Documentos e fotos</h3><div class="so-admin" id="docsAdmin" hidden><input type="file" id="docArq" multiple><small>Até 10 MB por arquivo (CRLV, seguro, fotos, etc.).</small></div><div class="hist" id="docsLista"></div></dialog>
+<dialog id="dlgKm"><div class="cab"><h2>Atualizar KM</h2><button type="button" class="sec" data-fechar>Fechar</button></div><input type="search" id="kmBusca" placeholder="Buscar prefixo, placa ou modelo" aria-label="Buscar viatura" style="margin-top:10px"><div id="kmLista" style="max-height:65vh;overflow:auto;margin-top:8px"></div></dialog>
 <datalist id="listaEmpregos"></datalist>
 <div id="ficha"></div>
 <div id="aviso" popover="manual" role="status"></div>
-
 <script>
-if (typeof supabase === "undefined") {
-  const e = document.getElementById("erroLogin");
-  e.textContent = "Não foi possível carregar a biblioteca do Supabase. Verifique a conexão com a internet e recarregue a página.";
-  e.hidden = false;
-  throw new Error("Biblioteca do Supabase não carregou");
-}
+if (typeof supabase === "undefined") { const e=document.getElementById("erroLogin"); e.textContent="Não foi possível carregar a biblioteca do Supabase. Verifique a conexão com a internet e recarregue a página."; e.hidden=false; throw new Error("Biblioteca do Supabase não carregou"); }
 const sb = supabase.createClient("https://jxtivpcduhomnnqpukaj.supabase.co", "sb_publishable_lJTNW-tGjLGPEZdkqY3q6w_R2OqNerz");
 const $ = id => document.getElementById(id);
 const LIMITE_KM = 500, LIMITE_DIAS = 30;
-
-// [campo, rótulo, tipo, grupo]
-const CAMPOS = [
-  ["prefixo","Prefixo","text","Identificação"],["placa","Placa","text"],["marca","Marca","text"],["modelo","Modelo","text"],
-  ["ano","Ano (AAAA ou AAAA/AAAA)","text"],["emprego","Emprego","text"],["km","KM atual","number"],
-  ["status","Status","select"],["observacao","Observação","text"],
-  ["ultima_revisao","Última revisão/manutenção","date","Manutenção"],["troca_oleo","Data da próxima troca de óleo","date"],
-  ["km_troca_oleo","KM da próxima troca de óleo","number"],["km_filtro_oleo","KM da próxima troca do filtro de óleo","number"],
-  ["km_filtro_combustivel","KM da próxima troca do filtro de combustível","number"],["km_filtro_ar","KM da próxima troca do filtro de ar","number"],
-  ["venc_licenciamento","Vencimento do licenciamento","date","Vencimento de documentos"],["venc_seguro","Vencimento do seguro","date"],
-  ["venc_ipva","Vencimento do IPVA","date"],["venc_vistoria","Vencimento da vistoria","date"],
-  ["cartao_abastecimento","Cartão de abastecimento","text","Documentos e dados técnicos"],["renavam","Renavam","text"],["chassi","Chassi","text"],
-  ["numeracao_pneu","Numeração do pneu","text"],["numero_motor","Número do motor","text"],["patrimonio","Patrimônio","text"],["combustivel","Combustível","text"]
-];
+const CAMPOS = [["prefixo","Prefixo","text","Identificação"],["placa","Placa","text"],["marca","Marca","text"],["modelo","Modelo","text"],["ano","Ano (AAAA ou AAAA/AAAA)","text"],["emprego","Emprego","text"],["km","KM atual","number"],["status","Status","select"],["observacao","Observação","text"],["ultima_revisao","Última revisão/manutenção","date","Manutenção"],["troca_oleo","Data da próxima troca de óleo","date"],["km_troca_oleo","KM da próxima troca de óleo","number"],["km_filtro_oleo","KM da próxima troca do filtro de óleo","number"],["km_filtro_combustivel","KM da próxima troca do filtro de combustível","number"],["km_filtro_ar","KM da próxima troca do filtro de ar","number"],["venc_licenciamento","Vencimento do licenciamento","date","Vencimento de documentos"],["venc_seguro","Vencimento do seguro","date"],["venc_ipva","Vencimento do IPVA","date"],["venc_vistoria","Vencimento da vistoria","date"],["cartao_abastecimento","Cartão de abastecimento","text","Documentos e dados técnicos"],["renavam","Renavam","text"],["chassi","Chassi","text"],["numeracao_pneu","Numeração do pneu","text"],["numero_motor","Número do motor","text"],["patrimonio","Patrimônio","text"],["combustivel","Combustível","text"]];
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Baixada"];
-
-let admin = false, podeKm = false, frota = [], reparos = [], editando = null, histId = null, histRows = [], histEdit = null;
-
+let admin=false, podeKm=false, frota=[], reparos=[], editando=null, histId=null, histRows=[], histEdit=null;
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtKm = v => v == null ? "-" : Number(v).toLocaleString("pt-BR");
 const fmtData = d => d ? d.split("-").reverse().join("/") : "-";
 const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function aviso(msg, erro){ const a=$("aviso"); a.textContent=msg; a.className=erro?"erro":""; if(a.matches(":popover-open")) a.hidePopover(); a.showPopover(); clearTimeout(aviso.t); aviso.t=setTimeout(()=>a.matches(":popover-open")&&a.hidePopover(), erro?7000:2500); }
+function msgErro(e){ const m=e?.message||String(e); if(/duplicate key.*prefixo/i.test(m)) return "Já existe uma viatura com este prefixo."; if(/duplicate key.*placa/i.test(m)) return "Já existe uma viatura com esta placa."; if(/multiple \(or no\) rows/i.test(m)) return "Não foi possível salvar: confirme que seu usuário é administrador."; if(/row-level security/i.test(m)) return "Sem permissão: apenas administradores podem alterar dados."; return "Erro: "+m; }
+function dias(iso){ const h=new Date(); h.setHours(0,0,0,0); return Math.round((new Date(iso+"T00:00:00")-h)/864e5); }
+let ordem={c:"prefixo",d:1};
+const valorOrd=(v,c)=>{ if(c!=="alertas") return v[c]; const a=alertas(v); return a.filter(x=>x[0]==="v").length*100+a.length; };
+const cmp=(a,b)=>{ const x=valorOrd(a,ordem.c), y=valorOrd(b,ordem.c); if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1; return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"pt-BR",{numeric:true}))*ordem.d; };
+function alertas(v){ if(v.status==="Baixada") return []; const a=[]; if(v.troca_oleo){ const hoje=new Date(); hoje.setHours(0,0,0,0); const d=Math.round((new Date(v.troca_oleo+"T00:00:00")-hoje)/864e5); if(d<0) a.push(["v",`Óleo vencido há ${-d} dia(s)`]); else if(d<=LIMITE_DIAS) a.push(["p",d===0?"Óleo vence hoje":`Óleo em ${d} dia(s)`]); } const rp=reparos.filter(r=>r.viatura_id===v.id); if(rp.length){ const grave=rp.some(r=>r.prioridade==="Urgente"||(r.prazo&&dias(r.prazo)<0)); a.push([grave?"v":"p",`${rp.length} reparo(s) pendente(s)${grave?" – urgente/atrasado":""}`]); } [["venc_licenciamento","Licenciamento"],["venc_seguro","Seguro"],["venc_ipva","IPVA"],["venc_vistoria","Vistoria"]].forEach(([c,nome])=>{ if(!v[c]) return; const d=dias(v[c]); if(d<0) a.push(["v",`${nome} vencido há ${-d} dia(s)`]); else if(d<=LIMITE_DIAS) a.push(["p",d===0?`${nome} vence hoje`:`${nome} em ${d} dia(s)`]); }); [["km_troca_oleo","Troca de óleo"],["km_filtro_oleo","Filtro de óleo"],["km_filtro_combustivel","Filtro de combustível"],["km_filtro_ar","Filtro de ar"]].forEach(([c,nome])=>{ if(v[c]==null||v.km==null) return; const r=v[c]-v.km; if(r<=0) a.push(["v",`${nome} vencido (${fmtKm(-r)} km)`]); else if(r<=LIMITE_KM) a.push(["p",`${nome} em ${fmtKm(r)} km`]); }); return a; }
+let ultimaCarga=0;
+function idadeKm(v){ if(!v.km_atualizado_em) return ""; const d=Math.floor((Date.now()-new Date(v.km_atualizado_em))/864e5); return `<small${d>30?' style="color:var(--verm);font-weight:700"':""}>KM atualizado ${d<=0?"hoje":"há "+d+" dia(s)"}</small>`; }
+async function carregar(){ const {data,error}=await sb.from("frota").select("*").order("prefixo"); if(error){aviso(msgErro(error),true);return;} frota=data; ultimaCarga=Date.now(); const r=await sb.from("reparos").select("*").eq("concluido",false).order("criado_em"); if(r.error) aviso(msgErro(r.error),true); else reparos=r.data; render(); }
+function filtradas(){ const q=norm($("busca").value.trim()), st=$("fStatus").value, em=$("fEmprego").value, so=$("fAlerta").checked; return frota.filter(v=>(!q||norm([v.prefixo,v.placa,v.marca,v.modelo,v.emprego,v.status,v.observacao].join(" ")).includes(q))&&(!st||v.status===st)&&(!em||v.emprego===em)&&(!so||alertas(v).length)).sort(cmp); }
+function render(){ const sel=$("fEmprego"), atual=sel.value; const emps=[...new Set(frota.map(v=>v.emprego).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR")); sel.innerHTML='<option value="">Todos os empregos</option>'+emps.map(e=>`<option${e===atual?" selected":""}>${esc(e)}</option>`).join(""); $("listaEmpregos").innerHTML=emps.map(e=>`<option value="${esc(e)}">`).join(""); document.querySelectorAll("th[data-ord]").forEach(t=>{ const at=t.dataset.ord===ordem.c; t.dataset.seta=at?(ordem.d>0?" ▲":" ▼"):""; t.setAttribute("aria-sort",at?(ordem.d>0?"ascending":"descending"):"none"); }); const n=s=>frota.filter(v=>v.status===s).length; const comAlerta=frota.filter(v=>alertas(v).length).length; $("resumo").innerHTML=[["Total",frota.length],["Disponíveis",n("Disponível")],["Em manutenção",n("Manutenção")],["Emprestadas",n("Emprestada")],["Baixadas",n("Baixada")]].map(([t,x])=>`<div><b>${x}</b>${t}</div>`).join("")+`<div class="a"><b>${comAlerta}</b>Com alertas</div>`; const lista=filtradas(); $("lista").innerHTML=lista.length?lista.map(v=>{ const al=alertas(v), nrep=reparos.filter(r=>r.viatura_id===v.id).length; return `<tr data-id="${v.id}" class="${v.status==="Baixada"?"baixada":""}"><td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td><td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego?" · "+esc(v.emprego):""}</small></td><td>${podeKm?`<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">`:fmtKm(v.km)}<br>${idadeKm(v)}</td><td class="st st-${esc(v.status)}">${admin?`<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x=>`<option${x===v.status?" selected":""}>${x}</option>`).join("")}</select>`:esc(v.status)}</td><td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo!=null?fmtKm(v.km_troca_oleo)+" km":"-"}</small></td><td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td><td>${al.map(([t,m])=>`<span class="chip ${t}">${esc(m)}</span>`).join("")||"<small>Em dia</small>"}</td><td>${admin?`<textarea class="obs" data-id="${v.id}" rows="2" maxlength="500" placeholder="Adicionar observação" aria-label="Observações">${esc(v.observacao)}</textarea>`:esc(v.observacao)||"-"}</td><td class="acoes"><button data-a="hist">Histórico</button> <button class="sec" data-a="dados">Dados</button> <button class="${nrep?"pend":""}" data-a="rep">Reparos${nrep?` (${nrep})`:""}</button><button class="sec" data-a="ver">${admin?"Editar":"Detalhes"}</button>${admin?'<button class="perigo" data-a="del">Excluir</button>':""}</td></tr>`; }).join(""):`<tr><td colspan="9" class="vazio">Nenhuma viatura encontrada.${admin?" Use “Nova viatura” para cadastrar.":""}</td></tr>`; }
+function montarCampos(){ let html=""; CAMPOS.forEach(([c,rot,tipo,grupo])=>{ if(grupo) html+=`<h3>${grupo}</h3>`; const ctl=tipo==="select"?`<select id="f_${c}" required>${STATUS.map(s=>`<option>${s}</option>`).join("")}</select>`:`<input id="f_${c}" type="${tipo==="number"?"text":tipo}" ${tipo==="number"?'inputmode="numeric" class="milhar"':""} ${tipo==="number"?'min="0"':tipo==="date"?'min="2000-01-01" max="2100-12-31"':""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c)?"required":""} ${MAIUSC.includes(c)?'style="text-transform:uppercase"':""} ${c==="emprego"?'list="listaEmpregos"':""}>`; html+=`<div><label for="f_${c}">${rot}</label>${ctl}</div>`; }); $("campos").innerHTML=html; }
+function abrirForm(v){ editando=v?v.id:null; $("formTitulo").textContent=v?`${admin?"Editar":"Detalhes de"} ${v.prefixo} / ${v.placa}`:"Nova viatura"; CAMPOS.forEach(([c])=>{ const el=$("f_"+c); el.value=v?.[c]??(c==="status"?"Disponível":c==="km"?0:""); if(el.classList.contains("milhar")&&el.value!=="") el.value=Number(el.value).toLocaleString("pt-BR"); el.disabled=!admin; }); $("formRodape").children[0].hidden=!admin; $("dlgForm").showModal(); }
+$("form").addEventListener("submit", async e=>{ e.preventDefault(); if(!admin) return; const o={}; for(const [c,,tipo] of CAMPOS){ let val=$("f_"+c).value.trim(); if(tipo==="number") val=val.replace(/\D/g,""); if(MAIUSC.includes(c)) val=val.toLocaleUpperCase("pt-BR"); o[c]=val===""?null:(tipo==="number"?Number(val):val); } const anos=String(o.ano).split("/"); if(!/^\d{4}(\/\d{4})?$/.test(o.ano)||anos.some(a=>a<1950||a>2100)) return aviso("Informe o ano como AAAA ou AAAA/AAAA.",true); if(o.km!=null && o.km<0) return aviso("KM não pode ser negativo.",true); let alvo=o; if(editando){ const orig=frota.find(v=>v.id===editando)||{}; alvo=Object.fromEntries(Object.entries(o).filter(([k,v])=>(orig[k]??null)!==v)); if(!Object.keys(alvo).length){$("dlgForm").close(); return aviso("Nenhuma alteração para salvar.");} } if(alvo.placa!==undefined && !/^[A-Z]{3}-?\d[A-Z0-9]\d{2}$/.test(alvo.placa)) return aviso("Placa inválida. Use o formato ABC1D23 ou ABC-1234.",true); const req=editando?sb.from("frota").update(alvo).eq("id",editando).select().single():sb.from("frota").insert(o).select().single(); const {data,error}=await req; if(error) return aviso(msgErro(error),true); const i=frota.findIndex(v=>v.id===data.id); if(i>=0) frota[i]=data; else frota.push(data); frota.sort((a,b)=>a.prefixo.localeCompare(b.prefixo,"pt-BR",{numeric:true})); $("dlgForm").close(); render(); aviso("Viatura salva."); });
 
-function aviso(msg, erro) {
-  const a = $("aviso"); a.textContent = msg; a.className = erro ? "erro" : "";
-  if (a.matches(":popover-open")) a.hidePopover();
-  a.showPopover();
-  clearTimeout(aviso.t); aviso.t = setTimeout(() => a.matches(":popover-open") && a.hidePopover(), erro ? 7000 : 2500);
-}
-function msgErro(e) {
-  const m = e?.message || String(e);
-  if (/duplicate key.*prefixo/i.test(m)) return "Já existe uma viatura com este prefixo.";
-  if (/duplicate key.*placa/i.test(m)) return "Já existe uma viatura com esta placa.";
-  if (/multiple \(or no\) rows/i.test(m)) return "Não foi possível salvar: confirme que seu usuário é administrador.";
-  if (/row-level security/i.test(m)) return "Sem permissão: apenas administradores podem alterar dados.";
-  return "Erro: " + m;
-}
-
-// ---------- Alertas ----------
-function dias(iso) {
-  const h = new Date(); h.setHours(0, 0, 0, 0);
-  return Math.round((new Date(iso + "T00:00:00") - h) / 864e5);
-}
-
-let ordem = { c: "prefixo", d: 1 };
-const valorOrd = (v, c) => { if (c !== "alertas") return v[c]; const a = alertas(v); return a.filter(x => x[0] === "v").length * 100 + a.length; };
-const cmp = (a, b) => {
-  const x = valorOrd(a, ordem.c), y = valorOrd(b, ordem.c);
-  if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
-  return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "pt-BR", { numeric: true })) * ordem.d;
-};
-
-function alertas(v) {
-  if (v.status === "Baixada") return [];
-  const a = [];
-  if (v.troca_oleo) {
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const d = Math.round((new Date(v.troca_oleo + "T00:00:00") - hoje) / 864e5);
-    if (d < 0) a.push(["v", `Óleo vencido há ${-d} dia(s)`]);
-    else if (d <= LIMITE_DIAS) a.push(["p", d === 0 ? "Óleo vence hoje" : `Óleo em ${d} dia(s)`]);
+// --- CORREÇÃO: Exclusão segura com dupla confirmação e contagem de histórico ---
+async function excluir(v){
+  if(!admin) return aviso("Apenas administradores podem excluir.",true);
+  const {count: qtdMan} = await sb.from("manutencoes").select("*",{count:"exact",head:true}).eq("viatura_id",v.id);
+  const {count: qtdRep} = await sb.from("reparos").select("*",{count:"exact",head:true}).eq("viatura_id",v.id);
+  const totalHist = (qtdMan||0)+(qtdRep||0);
+  const msg1 = totalHist>0
+    ? `ATENÇÃO: A viatura ${v.prefixo} / ${v.placa} tem ${qtdMan||0} manutenção(ões) e ${qtdRep||0} reparo(s) registrados.\n\nExcluir vai apagar a viatura E TODO esse histórico permanentemente.\n\nDeseja continuar?`
+    : `Excluir a viatura ${v.prefixo} / ${v.placa}?\n\nEssa ação não pode ser desfeita.`;
+  if(!confirm(msg1)) return;
+  // Segunda confirmação - digitação de segurança
+  const digitado = prompt(`Para confirmar a exclusão, digite o prefixo da viatura: ${v.prefixo}`);
+  if(digitado===null) return;
+  if(digitado.trim().toUpperCase()!==String(v.prefixo).toUpperCase()){
+    return aviso("Exclusão cancelada: prefixo digitado não confere.",true);
   }
-  const rp = reparos.filter(r => r.viatura_id === v.id);
-  if (rp.length) {
-    const grave = rp.some(r => r.prioridade === "Urgente" || (r.prazo && dias(r.prazo) < 0));
-    a.push([grave ? "v" : "p", `${rp.length} reparo(s) pendente(s)${grave ? " – urgente/atrasado" : ""}`]);
-  }
-  [["venc_licenciamento","Licenciamento"],["venc_seguro","Seguro"],["venc_ipva","IPVA"],["venc_vistoria","Vistoria"]].forEach(([c, nome]) => {
-    if (!v[c]) return;
-    const d = dias(v[c]);
-    if (d < 0) a.push(["v", `${nome} vencido há ${-d} dia(s)`]);
-    else if (d <= LIMITE_DIAS) a.push(["p", d === 0 ? `${nome} vence hoje` : `${nome} em ${d} dia(s)`]);
-  });
-  [["km_troca_oleo","Troca de óleo"],["km_filtro_oleo","Filtro de óleo"],["km_filtro_combustivel","Filtro de combustível"],["km_filtro_ar","Filtro de ar"]]
-    .forEach(([c, nome]) => {
-      if (v[c] == null || v.km == null) return;
-      const r = v[c] - v.km;
-      if (r <= 0) a.push(["v", `${nome} vencido (${fmtKm(-r)} km)`]);
-      else if (r <= LIMITE_KM) a.push(["p", `${nome} em ${fmtKm(r)} km`]);
-    });
-  return a;
+  const {error} = await sb.from("frota").delete().eq("id",v.id);
+  if(error) return aviso(msgErro(error),true);
+  frota=frota.filter(x=>x.id!==v.id); render(); aviso("Viatura excluída.");
 }
-
-// ---------- Dados ----------
-let ultimaCarga = 0;
-function idadeKm(v) {
-  if (!v.km_atualizado_em) return "";
-  const d = Math.floor((Date.now() - new Date(v.km_atualizado_em)) / 864e5);
-  return `<small${d > 30 ? ' style="color:var(--verm);font-weight:700"' : ""}>KM atualizado ${d <= 0 ? "hoje" : "há " + d + " dia(s)"}</small>`;
-}
-async function carregar() {
-  const { data, error } = await sb.from("frota").select("*").order("prefixo");
-  if (error) { aviso(msgErro(error), true); return; }
-  frota = data; ultimaCarga = Date.now();
-  const r = await sb.from("reparos").select("*").eq("concluido", false).order("criado_em");
-  if (r.error) aviso(msgErro(r.error), true); else reparos = r.data;
-  render();
-}
-
-function filtradas() {
-  const q = norm($("busca").value.trim()), st = $("fStatus").value, em = $("fEmprego").value, so = $("fAlerta").checked;
-  return frota.filter(v =>
-    (!q || norm([v.prefixo, v.placa, v.marca, v.modelo, v.emprego, v.status, v.observacao].join(" ")).includes(q)) &&
-    (!st || v.status === st) && (!em || v.emprego === em) && (!so || alertas(v).length)).sort(cmp);
-}
-
-function render() {
-  const sel = $("fEmprego"), atual = sel.value;
-  const emps = [...new Set(frota.map(v => v.emprego).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  sel.innerHTML = '<option value="">Todos os empregos</option>' + emps.map(e => `<option${e === atual ? " selected" : ""}>${esc(e)}</option>`).join("");
-  $("listaEmpregos").innerHTML = emps.map(e => `<option value="${esc(e)}">`).join("");
-  document.querySelectorAll("th[data-ord]").forEach(t => {
-    const at = t.dataset.ord === ordem.c;
-    t.dataset.seta = at ? (ordem.d > 0 ? " ▲" : " ▼") : "";
-    t.setAttribute("aria-sort", at ? (ordem.d > 0 ? "ascending" : "descending") : "none");
-  });
-  const n = s => frota.filter(v => v.status === s).length;
-  const comAlerta = frota.filter(v => alertas(v).length).length;
-  $("resumo").innerHTML = [["Total", frota.length],["Disponíveis", n("Disponível")],["Em manutenção", n("Manutenção")],
-    ["Emprestadas", n("Emprestada")],["Baixadas", n("Baixada")]].map(([t, x]) => `<div><b>${x}</b>${t}</div>`).join("")
-    + `<div class="a"><b>${comAlerta}</b>Com alertas</div>`;
-  const lista = filtradas();
-  $("lista").innerHTML = lista.length ? lista.map(v => {
-    const al = alertas(v), nrep = reparos.filter(r => r.viatura_id === v.id).length;
-    return `<tr data-id="${v.id}" class="${v.status === "Baixada" ? "baixada" : ""}">
-      <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
-      <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
-      <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}<br>${idadeKm(v)}</td>
-      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}</td>
-      <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
-      <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
-      <td>${al.map(([t, m]) => `<span class="chip ${t}">${esc(m)}</span>`).join("") || "<small>Em dia</small>"}</td>
-      <td>${admin ? `<textarea class="obs" data-id="${v.id}" rows="2" maxlength="500" placeholder="Adicionar observação" aria-label="Observações">${esc(v.observacao)}</textarea>` : esc(v.observacao) || "-"}</td>
-      <td class="acoes"><button data-a="hist">Histórico</button> <button class="sec" data-a="dados">Dados</button> <button class="${nrep ? "pend" : ""}" data-a="rep">Reparos${nrep ? ` (${nrep})` : ""}</button>
-        <button class="sec" data-a="ver">${admin ? "Editar" : "Detalhes"}</button>
-        ${admin ? '<button class="perigo" data-a="del">Excluir</button>' : ""}</td></tr>`;
-  }).join("") : `<tr><td colspan="9" class="vazio">Nenhuma viatura encontrada.${admin ? " Use “Nova viatura” para cadastrar." : ""}</td></tr>`;
-}
-
-// ---------- Formulário da viatura ----------
-function montarCampos() {
-  let html = "";
-  CAMPOS.forEach(([c, rot, tipo, grupo]) => {
-    if (grupo) html += `<h3>${grupo}</h3>`;
-    const ctl = tipo === "select"
-      ? `<select id="f_${c}" required>${STATUS.map(s => `<option>${s}</option>`).join("")}</select>`
-      : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""} ${c === "emprego" ? 'list="listaEmpregos"' : ""}>`;
-    html += `<div><label for="f_${c}">${rot}</label>${ctl}</div>`;
-  });
-  $("campos").innerHTML = html;
-}
-
-function abrirForm(v) {
-  editando = v ? v.id : null;
-  $("formTitulo").textContent = v ? `${admin ? "Editar" : "Detalhes de"} ${v.prefixo} / ${v.placa}` : "Nova viatura";
-  CAMPOS.forEach(([c]) => { const el = $("f_" + c); el.value = v?.[c] ?? (c === "status" ? "Disponível" : c === "km" ? 0 : ""); if (el.classList.contains("milhar") && el.value !== "") el.value = Number(el.value).toLocaleString("pt-BR"); el.disabled = !admin; });
-  $("formRodape").children[0].hidden = !admin;
-  $("dlgForm").showModal();
-}
-
-$("form").addEventListener("submit", async e => {
-  e.preventDefault();
-  if (!admin) return;
-  const o = {};
-  for (const [c, , tipo] of CAMPOS) {
-    let val = $("f_" + c).value.trim();
-    if (tipo === "number") val = val.replace(/\D/g, "");
-    if (MAIUSC.includes(c)) val = val.toLocaleUpperCase("pt-BR");
-    o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
-  }
-  const anos = String(o.ano).split("/");
-  if (!/^\d{4}(\/\d{4})?$/.test(o.ano) || anos.some(a => a < 1950 || a > 2100)) return aviso("Informe o ano como AAAA ou AAAA/AAAA.", true);
-  let alvo = o;
-  if (editando) {
-    const orig = frota.find(v => v.id === editando) || {};
-    alvo = Object.fromEntries(Object.entries(o).filter(([k, v]) => (orig[k] ?? null) !== v));
-    if (!Object.keys(alvo).length) { $("dlgForm").close(); return aviso("Nenhuma alteração para salvar."); }
-  }
-  if (alvo.placa !== undefined && !/^[A-Z]{3}-?\d[A-Z0-9]\d{2}$/.test(alvo.placa)) return aviso("Placa inválida. Use o formato ABC1D23 ou ABC-1234.", true);
-  const req = editando
-    ? sb.from("frota").update(alvo).eq("id", editando).select().single()
-    : sb.from("frota").insert(o).select().single();
-  const { data, error } = await req;
-  if (error) return aviso(msgErro(error), true);
-  const i = frota.findIndex(v => v.id === data.id);
-  if (i >= 0) frota[i] = data; else frota.push(data);
-  frota.sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
-  $("dlgForm").close(); render(); aviso("Viatura salva.");
-});
-
-async function excluir(v) {
-  if (!confirm(`Excluir a viatura ${v.prefixo} / ${v.placa} e todo o seu histórico de manutenção?`)) return;
-  const { error } = await sb.from("frota").delete().eq("id", v.id);
-  if (error) return aviso(msgErro(error), true);
-  frota = frota.filter(x => x.id !== v.id); render(); aviso("Viatura excluída.");
-}
-
-// ---------- Histórico de manutenção ----------
-async function abrirHist(v) {
-  histId = v.id;
-  $("histTitulo").textContent = `Histórico — ${v.prefixo} / ${v.placa}`;
-  sairEdicaoHist();
-  $("hData").max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  $("dlgHist").showModal(); await listarHist();
-}
-
-function sairEdicaoHist() {
-  histEdit = null;
-  $("hSalvar").textContent = "Registrar manutenção"; $("hCancelar").hidden = true;
-  $("formHist").reset();
-  montarAuto(); $("hAuto").hidden = false;
-  const v = frota.find(x => x.id === histId); $("hKm").value = v?.km != null ? Number(v.km).toLocaleString("pt-BR") : "";
-  atualizarPrevia();
-}
-
-// ---------- Próximas trocas automáticas ----------
-const SERVICOS = [
-  ["oleo", "Troca de óleo", "km_troca_oleo", 10000],
-  ["filtro_oleo", "Filtro de óleo", "km_filtro_oleo", 10000],
-  ["filtro_comb", "Filtro de combustível", "km_filtro_combustivel", 20000],
-  ["filtro_ar", "Filtro de ar", "km_filtro_ar", 20000]
-];
-
-function somarMeses(iso, n) {
-  const [a, m, d] = iso.split("-").map(Number);
-  const dt = new Date(a, m - 1 + n, 1);
-  const ultimo = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
-  dt.setDate(Math.min(d, ultimo));
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-}
-
-function lerIntervalos() { try { return JSON.parse(localStorage.getItem("intervalosManut")) || {}; } catch { return {}; } }
-
-function salvarIntervalos() {
-  const o = { meses: $("i_meses").value };
-  SERVICOS.forEach(([k]) => o[k] = $("i_" + k).value.replace(/\D/g, ""));
-  try { localStorage.setItem("intervalosManut", JSON.stringify(o)); } catch {}
-}
-
-function montarAuto() {
-  const g = lerIntervalos();
-  $("hAutoCampos").innerHTML = SERVICOS.map(([k, nome, , pad]) =>
-    `<div><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="a_${k}" style="width:auto"> ${nome}</label>
-     <input type="text" inputmode="numeric" class="milhar" id="i_${k}" value="${Number(g[k] || pad).toLocaleString("pt-BR")}" placeholder="Intervalo em km" aria-label="Intervalo de ${nome} em km"></div>`).join("")
-    + `<div><label for="i_meses">Prazo do óleo em meses (0 = só por KM)</label><input type="number" id="i_meses" min="0" value="${g.meses ?? 6}"></div>`;
-}
-
-function calcProximas() {
-  const data = $("hData").value, kmTxt = $("hKm").value.replace(/\D/g, ""), km = Number(kmTxt), r = {};
-  if (!data || kmTxt === "" || !Number.isFinite(km)) return r;
-  SERVICOS.forEach(([k, , col]) => {
-    const iv = Number($("i_" + k).value.replace(/\D/g, ""));
-    if ($("a_" + k).checked && iv > 0) r[col] = km + iv;
-  });
-  const meses = Number($("i_meses").value);
-  if ($("a_oleo").checked && meses > 0) r.troca_oleo = somarMeses(data, meses);
-  return r;
-}
-
-function atualizarPrevia() {
-  const r = calcProximas(), p = [];
-  SERVICOS.forEach(([k, nome, col]) => {
-    if (r[col] != null) p.push(`${nome}: ${fmtKm(r[col])} km` + (k === "oleo" && r.troca_oleo ? ` ou ${fmtData(r.troca_oleo)}` : ""));
-  });
-  $("hAutoPrevia").textContent = p.length ? "Próximas trocas: " + p.join(" · ") : "Informe data e KM e marque o que foi feito para calcular.";
-  salvarIntervalos();
-}
-
-function marcarPorDescricao() {
-  const t = $("hDesc").value.toLowerCase();
-  if (!/troc|substitu/.test(t)) return; // só sugere quando o texto fala em troca/substituição
-  const marcar = (k, ok) => { if (ok) $("a_" + k).checked = true; };
-  marcar("oleo", /[oó]leo/.test(t));
-  marcar("filtro_oleo", /filtro.*[oó]leo|[oó]leo.*filtro/.test(t));
-  marcar("filtro_comb", /combust/.test(t));
-  marcar("filtro_ar", /filtro.*\bar\b|\bar\b.*filtro/.test(t));
-}
-
-async function listarHist() {
-  const { data, error } = await sb.from("manutencoes").select("*").eq("viatura_id", histId).order("data", { ascending: false });
-  if (error) { $("histLista").innerHTML = ""; return aviso(msgErro(error), true); }
-  histRows = data;
-  const total = data.reduce((s, r) => s + (Number(r.valor) || 0), 0);
-  $("histTotal").textContent = data.length ? `${data.length} registro(s) · custo total ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : "";
-  $("histLista").innerHTML = data.length ? `<table><thead><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th>${admin ? "<th></th>" : ""}</tr></thead><tbody>${data.map(r =>
-    `<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina) || "-"}</td>
-     <td>${r.valor != null ? Number(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}</td>
-     ${admin ? `<td class="acoes"><button class="sec" data-edit="${r.id}">Editar</button> <button class="perigo" data-del="${r.id}">Excluir</button></td>` : ""}</tr>`).join("")}</tbody></table>`
-    : "<p>Nenhuma manutenção registrada.</p>";
-}
-
-$("formHist").addEventListener("submit", async e => {
-  e.preventDefault();
-  const reg = { viatura_id: histId, data: $("hData").value, km: Number($("hKm").value.replace(/\D/g, "")), descricao: $("hDesc").value.trim(),
-    oficina: $("hOficina").value.trim() || null, valor: $("hValor").value === "" ? null : Number($("hValor").value) };
-  const { error } = histEdit
-    ? await sb.from("manutencoes").update({ data: reg.data, km: reg.km, descricao: reg.descricao, oficina: reg.oficina, valor: reg.valor }).eq("id", histEdit)
-    : await sb.from("manutencoes").insert(reg);
-  if (error) return aviso(msgErro(error), true);
-  // atualiza a viatura: última revisão e KM (apenas se o registro for mais recente/maior)
-  const v = frota.find(x => x.id === histId), up = {};
-  const maisRecente = !v.ultima_revisao || reg.data >= v.ultima_revisao;
-  const prox = !histEdit && maisRecente ? calcProximas() : {};
-  if (!v.ultima_revisao || reg.data > v.ultima_revisao) up.ultima_revisao = reg.data;
-  Object.assign(up, prox);
-  if (reg.km > (v.km ?? 0)) up.km = reg.km;
-  let falha = "";
-  if (Object.keys(up).length) {
-    const r2 = await sb.from("frota").update(up).eq("id", histId).select().single();
-    if (r2.error) falha = msgErro(r2.error);
-    else { frota[frota.findIndex(x => x.id === histId)] = r2.data; render(); }
-  }
-  const editou = !!histEdit;
-  sairEdicaoHist();
-  await listarHist();
-  if (falha) return aviso("Manutenção salva, mas a viatura não foi atualizada: " + falha, true);
-  aviso(editou ? "Manutenção atualizada." : Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
-});
-
-$("histLista").addEventListener("click", async e => {
-  if (e.target.dataset.edit) {
-    const r = histRows.find(x => x.id === Number(e.target.dataset.edit)); if (!r) return;
-    histEdit = r.id; $("hAuto").hidden = true;
-    $("hData").value = r.data; $("hKm").value = Number(r.km).toLocaleString("pt-BR"); $("hOficina").value = r.oficina ?? "";
-    $("hValor").value = r.valor ?? ""; $("hDesc").value = r.descricao;
-    $("hSalvar").textContent = "Salvar alterações"; $("hCancelar").hidden = false;
-    $("dlgHist").scrollTo({ top: 0, behavior: "smooth" }); $("hData").focus();
-    return;
-  }
-  const id = e.target.dataset.del; if (!id || !confirm("Excluir este registro de manutenção?")) return;
-  const { error } = await sb.from("manutencoes").delete().eq("id", id);
-  if (error) return aviso(msgErro(error), true);
-  if (Number(id) === histEdit) sairEdicaoHist();
-  await listarHist();
-});
-
-// ---------- Exportar ----------
-$("btnCsv").onclick = () => {
-  const cols = CAMPOS.map(c => c[0]), cab = CAMPOS.map(c => c[1]);
-  const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = "\uFEFF" + [cab, ...filtradas().map(v => cols.map(c => v[c]))].map(l => l.map(cel).join(";")).join("\r\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  a.download = `viaturas-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
-};
-
-// ---------- Eventos da tela ----------
-$("lista").addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
-  const v = frota.find(x => x.id === Number(b.closest("tr").dataset.id));
-  if (b.dataset.a === "hist") abrirHist(v); else if (b.dataset.a === "dados") abrirDados(v); else if (b.dataset.a === "rep") abrirReparos(v); else if (b.dataset.a === "ver") abrirForm(v); else if (b.dataset.a === "del") excluir(v);
-});
-async function aoAlterar(e) {
-  const ki = e.target.closest(".kmin");
-  if (ki) {
-    const dig = ki.value.replace(/\D/g, ""), v = frota.find(x => x.id === Number(ki.dataset.id)), novo = Number(dig);
-    if (dig === "" || !Number.isFinite(novo)) { aviso("Informe um KM válido.", true); return render(); }
-    if (novo < Number(v.km)) {
-      if (!admin) { aviso("O KM não pode ser menor que o atual. Peça a um administrador para corrigir.", true); return render(); }
-      if (!confirm(`O KM digitado (${fmtKm(novo)}) é menor que o atual (${fmtKm(v.km)}). Confirmar mesmo assim?`)) return render();
-    }
-    const { error } = await sb.rpc("atualizar_km", { p_id: v.id, p_km: novo });
-    if (error) { aviso(msgErro(error), true); return render(); }
-    v.km = novo; render(); aviso("KM atualizado."); return;
-  }
-  const ob = e.target.closest(".obs");
-  if (ob) {
-    const { data, error } = await sb.from("frota").update({ observacao: ob.value.trim() || null }).eq("id", Number(ob.dataset.id)).select().single();
-    if (error) { aviso(msgErro(error), true); return render(); }
-    frota[frota.findIndex(v => v.id === data.id)] = data; aviso("Observação salva."); return;
-  }
-  const el = e.target.closest(".stsel"); if (!el) return;
-  const { data, error } = await sb.from("frota").update({ status: el.value }).eq("id", Number(el.dataset.id)).select().single();
-  if (error) { aviso(msgErro(error), true); return render(); }
-  frota[frota.findIndex(v => v.id === data.id)] = data; render(); aviso("Status atualizado.");
-}
-$("lista").addEventListener("change", aoAlterar);
-$("kmLista").addEventListener("change", aoAlterar);
-// ---------- Dados técnicos ----------
-const TECNICOS = CAMPOS.slice(-7);
-let dadosId = null;
-
-function abrirDados(v) {
-  dadosId = v.id;
-  $("dadosTitulo").textContent = `Dados técnicos — ${v.prefixo} / ${v.placa}`;
-  TECNICOS.forEach(([c]) => { const el = $("d_" + c); el.value = v[c] ?? ""; el.disabled = !admin; });
-  $("dadosSalvar").hidden = !admin;
-  listarDocs();
-  $("dlgDados").showModal();
-}
-
-$("formDados").addEventListener("submit", async e => {
-  e.preventDefault(); if (!admin) return;
-  const o = {};
-  TECNICOS.forEach(([c]) => {
-    let val = $("d_" + c).value.trim();
-    if (c === "chassi") val = val.toLocaleUpperCase("pt-BR");
-    o[c] = val || null;
-  });
-  const { data, error } = await sb.from("frota").update(o).eq("id", dadosId).select().single();
-  if (error) return aviso(msgErro(error), true);
-  frota[frota.findIndex(v => v.id === data.id)] = data;
-  $("dlgDados").close(); render(); aviso("Dados técnicos salvos.");
-});
-
-document.querySelector("thead").addEventListener("click", e => {
-  const t = e.target.closest("th[data-ord]"); if (!t) return;
-  const c = t.dataset.ord;
-  ordem = { c, d: ordem.c === c ? -ordem.d : (c === "alertas" || c === "km" ? -1 : 1) };
-  render();
-});
-
-// ---------- Custos ----------
-const brl = x => Number(x).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-async function abrirCustos() {
-  $("cDe").value = `${new Date().getFullYear()}-01-01`; $("cAte").value = new Date().toISOString().slice(0, 10);
-  $("dlgCustos").showModal(); await gerarCustos();
-}
-async function gerarCustos() {
-  let data = [], de = 0;
-  for (;;) {
-    let q = sb.from("manutencoes").select("viatura_id,data,valor").order("id").range(de, de + 999);
-    if ($("cDe").value) q = q.gte("data", $("cDe").value);
-    if ($("cAte").value) q = q.lte("data", $("cAte").value);
-    const r = await q;
-    if (r.error) return aviso(msgErro(r.error), true);
-    data = data.concat(r.data);
-    if (r.data.length < 1000) break;
-    de += 1000;
-  }
-  const porV = {}, porM = {}; let total = 0;
-  data.forEach(r => {
-    const val = Number(r.valor) || 0; total += val;
-    const o = porV[r.viatura_id] ||= { n: 0, t: 0 }; o.n++; o.t += val;
-    const m = r.data.slice(0, 7); porM[m] = (porM[m] || 0) + val;
-  });
-  const lv = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).map(([id, x]) => {
-    const v = frota.find(f => f.id === Number(id));
-    return `<tr><td>${esc(v ? v.prefixo + " / " + v.placa : "Viatura " + id)}</td><td>${x.n}</td><td>${brl(x.t)}</td></tr>`;
-  }).join("");
-  const lm = Object.entries(porM).sort().map(([m, t]) => `<tr><td>${m.split("-").reverse().join("/")}</td><td>${brl(t)}</td></tr>`).join("");
-  $("custosRes").innerHTML = `<p style="font-weight:700">${data.length} serviço(s) · total ${brl(total)}</p>
-    <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
-    <h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
-}
-$("btnCustos").onclick = abrirCustos;
-$("cGerar").onclick = gerarCustos;
-
-// ---------- Ficha para impressão / PDF ----------
-async function imprimirFicha() {
-  const v = frota.find(x => x.id === dadosId); if (!v) return;
-  const { data } = await sb.from("manutencoes").select("*").eq("viatura_id", v.id).order("data", { ascending: false });
-  const val = (c, t) => t === "date" ? fmtData(v[c]) : (v[c] ?? "-");
-  $("ficha").innerHTML = `<h1 style="margin:0">Ficha da viatura ${esc(v.prefixo)} / ${esc(v.placa)}</h1><p>Emitida em ${new Date().toLocaleDateString("pt-BR")}</p>
-    <table class="fx">${CAMPOS.map(([c, rot, t]) => `<tr><th>${rot}</th><td>${esc(val(c, t))}</td></tr>`).join("")}</table>
-    <h2>Histórico de manutenção</h2><table class="fx"><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th></tr>
-    ${(data || []).map(r => `<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina) || "-"}</td><td>${r.valor != null ? brl(r.valor) : "-"}</td></tr>`).join("") || '<tr><td colspan="5">Nenhum registro.</td></tr>'}</table>`;
-  window.print();
-}
-$("btnFicha").onclick = imprimirFicha;
-
-// ---------- Backup ----------
-async function todos(t) {
-  let r = [], de = 0;
-  for (;;) {
-    const { data, error } = await sb.from(t).select("*").order("id").range(de, de + 999);
-    if (error) throw error;
-    r = r.concat(data);
-    if (data.length < 1000) return r;
-    de += 1000;
-  }
-}
-$("btnBackup").onclick = async () => {
-  let m, rp;
-  try { m = await todos("manutencoes"); rp = await todos("reparos"); } catch (e) { return aviso(msgErro(e), true); }
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota, manutencoes: m, reparos: rp }, null, 1)], { type: "application/json" }));
-  a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
-};
-
-// ---------- Documentos e fotos ----------
-const BUCKET = "documentos";
-async function listarDocs() {
-  const { data, error } = await sb.storage.from(BUCKET).list(`viatura_${dadosId}`, { sortBy: { column: "created_at", order: "desc" } });
-  if (error) { $("docsLista").innerHTML = ""; return aviso(msgErro(error), true); }
-  const arq = data.filter(f => f.name !== ".emptyFolderPlaceholder");
-  $("docsLista").innerHTML = arq.length
-    ? `<table style="min-width:0"><tbody>${arq.map(f => `<tr><td>${esc(f.name.replace(/^\d+_/, ""))}</td><td class="acoes"><button data-abrir="${esc(f.name)}">Abrir</button> ${admin ? `<button class="perigo" data-apagar="${esc(f.name)}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
-    : "<p>Nenhum arquivo anexado.</p>";
-}
-$("docArq").addEventListener("change", async e => {
-  let falhou = false;
-  for (const f of e.target.files) {
-    if (f.size > 10 * 1024 * 1024) { aviso(`${f.name}: maior que 10 MB.`, true); falhou = true; continue; }
-    const nome = f.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "_");
-    const { error } = await sb.storage.from(BUCKET).upload(`viatura_${dadosId}/${Date.now()}_${nome}`, f);
-    if (error) { aviso(msgErro(error), true); falhou = true; break; }
-  }
-  e.target.value = ""; await listarDocs();
-  if (!falhou) aviso("Arquivo(s) enviado(s).");
-});
-$("docsLista").addEventListener("click", async e => {
-  const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.abrir) {
-    const w = window.open("about:blank", "_blank");
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(`viatura_${dadosId}/${b.dataset.abrir}`, 300);
-    if (error || !data?.signedUrl) { w?.close(); return aviso(msgErro(error || "Não foi possível abrir o arquivo."), true); }
-    if (w) w.location.href = data.signedUrl; else aviso("O navegador bloqueou a janela. Permita pop-ups e tente de novo.", true);
-  } else if (b.dataset.apagar && confirm("Excluir este arquivo?")) {
-    const { error } = await sb.storage.from(BUCKET).remove([`viatura_${dadosId}/${b.dataset.apagar}`]);
-    if (error) return aviso(msgErro(error), true);
-    await listarDocs();
-  }
-});
-
-// ---------- Histórico de alterações ----------
-async function abrirLog() {
-  $("dlgLog").showModal(); $("logRes").textContent = "Carregando...";
-  const { data, error } = await sb.from("log_alteracoes").select("*").order("id", { ascending: false }).limit(200);
-  if (error) { $("logRes").textContent = ""; return aviso(msgErro(error), true); }
-  const ROT = { concluido: "Concluído", concluido_em: "Concluído em", prioridade: "Prioridade", prazo: "Prazo", descricao: "Descrição", ...Object.fromEntries(CAMPOS.map(([c, r]) => [c, r])) };
-  const fv = x => x == null || x === "" ? "vazio" : String(x);
-  const linhas = data.map(l => {
-    const a = l.antes || {}, d = l.depois || {}, base = l.depois || l.antes || {};
-    let item, mud;
-    if (l.tabela === "frota") item = `${base.prefixo || ""} / ${base.placa || ""}`;
-    else { const v = frota.find(f => f.id === base.viatura_id); item = `${l.tabela === "reparos" ? "Reparo" : "Manutenção"} · ${v ? v.prefixo : "viatura " + base.viatura_id}`; }
-    if (l.acao === "INSERT") mud = l.tabela === "frota" ? "Cadastrada" : "Registrada: " + esc(base.descricao || "");
-    else if (l.acao === "DELETE") mud = "Excluído" + (l.tabela === "manutencoes" ? ": " + esc(base.descricao || "") : "");
-    else mud = Object.keys(d).filter(k => k !== "criado_em" && JSON.stringify(a[k]) !== JSON.stringify(d[k]))
-      .map(k => `${esc(ROT[k] || k)}: ${esc(fv(a[k]))} → ${esc(fv(d[k]))}`).join("<br>") || "-";
-    return `<tr><td>${new Date(l.criado_em).toLocaleString("pt-BR")}</td><td>${esc(l.usuario_email || "-")}</td><td>${esc(item)}</td><td>${mud}</td></tr>`;
-  });
-  $("logRes").innerHTML = linhas.length
-    ? `<table style="min-width:640px"><thead><tr><th>Quando</th><th>Quem</th><th>Item</th><th>O que mudou</th></tr></thead><tbody>${linhas.join("")}</tbody></table>`
-    : "<p>Nenhuma alteração registrada ainda.</p>";
-}
-$("btnLog").onclick = abrirLog;
-
-// ---------- Usuários e permissões ----------
-async function abrirUsuarios() {
-  $("dlgUsr").showModal(); $("usrRes").textContent = "Carregando...";
-  const { data, error } = await sb.rpc("listar_usuarios");
-  if (error) { $("usrRes").textContent = ""; return aviso(msgErro(error), true); }
-  $("usrRes").innerHTML = `<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u =>
-    `<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString("pt-BR") : "nunca"}</td>
-     <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${u.perfil ? "" : '<option value="" selected disabled>Sem acesso</option>'}${["admin", "operador", "consulta"].map(p =>
-       `<option value="${p}"${p === u.perfil ? " selected" : ""}>${{ admin: "Administrador", operador: "Atualiza KM", consulta: "Consulta" }[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
-}
-$("usrRes").addEventListener("change", async e => {
-  const el = e.target.closest(".perfsel"); if (!el) return;
-  const { error } = await sb.rpc("definir_perfil", { uid: el.dataset.id, novo: el.value });
-  if (error) { aviso(msgErro(error), true); return abrirUsuarios(); }
-  aviso("Perfil atualizado.");
-});
-$("btnUsr").onclick = abrirUsuarios;
-
-// ---------- Reparos a fazer ----------
-let repId = null;
-async function abrirReparos(v) {
-  repId = v.id;
-  $("repTitulo").textContent = `Reparos a fazer — ${v.prefixo} / ${v.placa}`;
-  $("formRep").reset();
-  $("dlgRep").showModal(); await listarReparos();
-}
-async function listarReparos() {
-  const { data, error } = await sb.from("reparos").select("*").eq("viatura_id", repId).order("criado_em", { ascending: false });
-  if (error) return aviso(msgErro(error), true);
-  const pend = data.filter(r => !r.concluido), feitos = data.filter(r => r.concluido).slice(0, 10);
-  const dt = x => new Date(x).toLocaleDateString("pt-BR");
-  const prazo = r => r.prazo ? `<br><small${dias(r.prazo) < 0 ? ' style="color:var(--verm);font-weight:700"' : ""}>Prazo: ${fmtData(r.prazo)}${dias(r.prazo) < 0 ? " (atrasado)" : ""}</small>` : "";
-  $("repLista").innerHTML = (pend.length
-    ? `<table style="min-width:0"><tbody>${pend.map(r => `<tr><td>${r.prioridade === "Urgente" ? '<span class="chip v">Urgente</span> ' : ""}${esc(r.descricao)}${prazo(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td>
-      <td class="acoes">${admin ? `<button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
-    : "<p>Nenhum reparo pendente.</p>")
-    + (feitos.length ? `<h3>Concluídos</h3><table style="min-width:0"><tbody>${feitos.map(r => `<tr><td>${esc(r.descricao)}<br><small>Concluído em ${dt(r.concluido_em)}</small></td></tr>`).join("")}</tbody></table>` : "");
-}
-async function recarregarReparos() {
-  const r = await sb.from("reparos").select("*").eq("concluido", false);
-  if (!r.error) reparos = r.data;
-  render(); await listarReparos();
-}
-$("formRep").addEventListener("submit", async e => {
-  e.preventDefault(); if (!admin) return;
-  const { error } = await sb.from("reparos").insert({ viatura_id: repId, descricao: $("rDesc").value.trim(), prioridade: $("rPrio").value, prazo: $("rPrazo").value || null });
-  if (error) return aviso(msgErro(error), true);
-  $("formRep").reset(); await recarregarReparos(); aviso("Reparo registrado. A viatura agora tem um alerta.");
-});
-$("repLista").addEventListener("click", async e => {
-  const b = e.target.closest("button"); if (!b || !admin) return;
-  if (b.dataset.concluir) {
-    const { error } = await sb.from("reparos").update({ concluido: true, concluido_em: new Date().toISOString() }).eq("id", Number(b.dataset.concluir));
-    if (error) return aviso(msgErro(error), true);
-    await recarregarReparos(); aviso("Reparo concluído.");
-  } else if (b.dataset.apagar && confirm("Excluir este reparo?")) {
-    const { error } = await sb.from("reparos").delete().eq("id", Number(b.dataset.apagar));
-    if (error) return aviso(msgErro(error), true);
-    await recarregarReparos();
-  }
-});
-
-// pontos de milhar enquanto digita (KM na tabela, em Editar, no Histórico e nos intervalos)
-document.addEventListener("input", e => {
-  const el = e.target.closest?.(".kmin, .milhar"); if (!el) return;
-  const antes = el.value.slice(0, el.selectionStart).replace(/\D/g, "").length, d = el.value.replace(/\D/g, "");
-  el.value = d ? Number(d).toLocaleString("pt-BR") : "";
-  let n = 0, i = 0;
-  while (i < el.value.length && n < antes) { if (/\d/.test(el.value[i])) n++; i++; }
-  el.setSelectionRange(i, i);
-});
-
-// ---------- Atualizar KM (tela simples) ----------
-function renderKm() {
-  const q = norm($("kmBusca").value.trim());
-  $("kmLista").innerHTML = frota.filter(v => v.status !== "Baixada" && (!q || norm([v.prefixo, v.placa, v.modelo].join(" ")).includes(q)))
-    .sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }))
-    .map(v => `<div class="kmrow"><div><b>${esc(v.prefixo)}</b> <small>${esc(v.placa)} · ${esc(v.modelo)}</small><br>${idadeKm(v)}</div>
-      <input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM de ${esc(v.prefixo)}"></div>`).join("") || "<p>Nenhuma viatura.</p>";
-}
-$("btnKm").onclick = () => { $("kmBusca").value = ""; renderKm(); $("dlgKm").showModal(); };
-$("kmBusca").addEventListener("input", renderKm);
-
-// ---------- Atualizar dados ----------
-$("btnAtualizar").onclick = async () => { await carregar(); aviso("Dados atualizados."); };
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden || $("app").hidden || Date.now() - ultimaCarga < 120000) return;
-  if (document.activeElement?.closest?.(".kmin, .obs") || document.querySelector("dialog[open]")) return;
-  carregar();
-});
-
-$("btnNova").onclick = () => abrirForm(null);
-$("hCancelar").onclick = () => sairEdicaoHist();
-$("formHist").addEventListener("input", e => {
-  if (e.target.id === "hDesc" && !histEdit) marcarPorDescricao();
-  atualizarPrevia();
-});
-["busca", "fStatus", "fEmprego", "fAlerta"].forEach(id => $(id).addEventListener("input", render));
-document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.closest("dialog").close());
-
-// ---------- Login ----------
-async function entrar() {
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) throw new Error("Sessão expirada. Entre novamente.");
-  const { data } = await sb.from("usuarios_perfis").select("perfil").eq("id", user.id).maybeSingle();
-  if (!data?.perfil) { await sb.auth.signOut(); throw new Error("Seu usuário ainda não foi liberado por um administrador."); }
-  admin = data?.perfil === "admin";
-  podeKm = admin || data?.perfil === "operador";
-  $("perfilTxt").textContent = admin ? "· Administrador" : data?.perfil === "operador" ? "· Atualiza KM" : "· Consulta";
-  document.querySelectorAll(".so-admin").forEach(el => el.hidden = !admin);
-  $("btnKm").hidden = !podeKm;
-  $("login").hidden = true; $("app").hidden = false;
-  await carregar();
-}
-
-$("login").addEventListener("submit", async e => {
-  e.preventDefault();
-  const btn = $("btnEntrar"), erro = $("erroLogin");
-  erro.hidden = true; btn.disabled = true; btn.textContent = "Entrando...";
-  const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("senha").value });
-  btn.disabled = false; btn.textContent = "Entrar";
-  try {
-    if (error) throw error;
-    await entrar();
-  } catch (e) {
-    const m = e?.message || String(e);
-    erro.textContent = /invalid login/i.test(m) ? "E-mail ou senha incorretos."
-      : /confirm/i.test(m) ? "E-mail ainda não confirmado no Supabase."
-      : "Não foi possível entrar: " + m;
-    erro.hidden = false;
-  }
-});
-
-$("btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
-
-montarCampos();
-montarAuto();
-document.querySelectorAll("th.ord").forEach(t => {
-  t.tabIndex = 0; t.setAttribute("role", "button");
-  t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.click(); } });
-});
-$("camposDados").innerHTML = TECNICOS.map(([c, rot]) => `<div><label for="d_${c}">${rot}</label><input id="d_${c}"${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`).join("");
-sb.auth.getSession().then(({ data }) => { if (data.session) return entrar(); })
-  .catch(e => { const er = $("erroLogin"); er.textContent = e.message || "Não foi possível restaurar a sessão."; er.hidden = false; });
+async function abrirHist(v){ histId=v.id; $("histTitulo").textContent=`Histórico — ${v.prefixo} / ${v.placa}`; sairEdicaoHist(); $("hData").max=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10); $("dlgHist").showModal(); await listarHist(); }
+function sairEdicaoHist(){ histEdit=null; $("hSalvar").textContent="Registrar manutenção"; $("hCancelar").hidden=true; $("formHist").reset(); montarAuto(); $("hAuto").hidden=false; const v=frota.find(x=>x.id===histId); $("hKm").value=v?.km!=null?Number(v.km).toLocaleString("pt-BR"):""; atualizarPrevia(); }
+const SERVICOS=[["oleo","Troca de óleo","km_troca_oleo",10000],["filtro_oleo","Filtro de óleo","km_filtro_oleo",10000],["filtro_comb","Filtro de combustível","km_filtro_combustivel",20000],["filtro_ar","Filtro de ar","km_filtro_ar",20000]];
+function somarMeses(iso,n){ const [a,m,d]=iso.split("-").map(Number); const dt=new Date(a,m-1+n,1); const ultimo=new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate(); dt.setDate(Math.min(d,ultimo)); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`; }
+function lerIntervalos(){ try{ return JSON.parse(localStorage.getItem("intervalosManut"))||{}; }catch{ return {}; } }
+function salvarIntervalos(){ const o={meses:$("i_meses").value}; SERVICOS.forEach(([k])=>o[k]=$("i_"+k).value.replace(/\D/g,"")); try{localStorage.setItem("intervalosManut",JSON.stringify(o));}catch{} }
+function montarAuto(){ const g=lerIntervalos(); $("hAutoCampos").innerHTML=SERVICOS.map(([k,nome,,pad])=>`<div><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="a_${k}" style="width:auto"> ${nome}</label><input type="text" inputmode="numeric" class="milhar" id="i_${k}" value="${Number(g[k]||pad).toLocaleString("pt-BR")}" placeholder="Intervalo em km" aria-label="Intervalo de ${nome} em km"></div>`).join("")+`<div><label for="i_meses">Prazo do óleo em meses (0 = só por KM)</label><input type="number" id="i_meses" min="0" value="${g.meses ?? 6}"></div>`; }
+function calcProximas(){ const data=$("hData").value, kmTxt=$("hKm").value.replace(/\D/g,""), km=Number(kmTxt), r={}; if(!data||kmTxt===""||!Number.isFinite(km)) return r; SERVICOS.forEach(([k,,col])=>{ const iv=Number($("i_"+k).value.replace(/\D/g,"")); if($("a_"+k).checked&&iv>0) r[col]=km+iv; }); const meses=Number($("i_meses").value); if($("a_oleo").checked&&meses>0) r.troca_oleo=somarMeses(data,meses); return r; }
+function atualizarPrevia(){ const r=calcProximas(), p=[]; SERVICOS.forEach(([k,nome,col])=>{ if(r[col]!=null) p.push(`${nome}: ${fmtKm(r[col])} km`+(k==="oleo"&&r.troca_oleo?` ou ${fmtData(r.troca_oleo)}`:"")); }); $("hAutoPrevia").textContent=p.length?"Próximas trocas: "+p.join(" · "):"Informe data e KM e marque o que foi feito para calcular."; salvarIntervalos(); }
+function marcarPorDescricao(){ const t=$("hDesc").value.toLowerCase(); if(!/troc|substitu/.test(t)) return; const marcar=(k,ok)=>{ if(ok) $("a_"+k).checked=true; }; marcar("oleo",/[oó]leo/.test(t)); marcar("filtro_oleo",/filtro.*[oó]leo|[oó]leo.*filtro/.test(t)); marcar("filtro_comb",/combust/.test(t)); marcar("filtro_ar",/filtro.*\bar\b|\bar\b.*filtro/.test(t)); }
+async function listarHist(){ const {data,error}=await sb.from("manutencoes").select("*").eq("viatura_id",histId).order("data",{ascending:false}); if(error){$("histLista").innerHTML=""; return aviso(msgErro(error),true);} histRows=data; const total=data.reduce((s,r)=>s+(Number(r.valor)||0),0); $("histTotal").textContent=data.length?`${data.length} registro(s) · custo total ${total.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}`:""; $("histLista").innerHTML=data.length?`<table><thead><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th>${admin?"<th></th>":""}</tr></thead><tbody>${data.map(r=>`<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina)||"-"}</td><td>${r.valor!=null?Number(r.valor).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"-"}</td>${admin?`<td class="acoes"><button class="sec" data-edit="${r.id}">Editar</button> <button class="perigo" data-del="${r.id}">Excluir</button></td>`:""}</tr>`).join("")}</tbody></table>`:"<p>Nenhuma manutenção registrada.</p>"; }
+$("formHist").addEventListener("submit", async e=>{ e.preventDefault(); const reg={viatura_id:histId,data:$("hData").value,km:Number($("hKm").value.replace(/\D/g,"")),descricao:$("hDesc").value.trim(),oficina:$("hOficina").value.trim()||null,valor:$("hValor").value===""?null:Number($("hValor").value)}; const {error}=histEdit?await sb.from("manutencoes").update({data:reg.data,km:reg.km,descricao:reg.descricao,oficina:reg.oficina,valor:reg.valor}).eq("id",histEdit):await sb.from("manutencoes").insert(reg); if(error) return aviso(msgErro(error),true); const v=frota.find(x=>x.id===histId), up={}; const maisRecente=!v.ultima_revisao||reg.data>=v.ultima_revisao; const prox=!histEdit&&maisRecente?calcProximas():{}; if(!v.ultima_revisao||reg.data>v.ultima_revisao) up.ultima_revisao=reg.data; Object.assign(up,prox); if(reg.km>(v.km??0)) up.km=reg.km; let falha=""; if(Object.keys(up).length){ const r2=await sb.from("frota").update(up).eq("id",histId).select().single(); if(r2.error) falha=msgErro(r2.error); else {frota[frota.findIndex(x=>x.id===histId)]=r2.data; render();} } const editou=!!histEdit; sairEdicaoHist(); await listarHist(); if(falha) return aviso("Manutenção salva, mas a viatura não foi atualizada: "+falha,true); aviso(editou?"Manutenção atualizada.":Object.keys(prox).length?"Manutenção registrada e próximas trocas atualizadas.":"Manutenção registrada."); });
+$("histLista").addEventListener("click", async e=>{ if(e.target.dataset.edit){ const r=histRows.find(x=>x.id===Number(e.target.dataset.edit)); if(!r) return; histEdit=r.id; $("hAuto").hidden=true; $("hData").value=r.data; $("hKm").value=Number(r.km).toLocaleString("pt-BR"); $("hOficina").value=r.oficina??""; $("hValor").value=r.valor??""; $("hDesc").value=r.descricao; $("hSalvar").textContent="Salvar alterações"; $("hCancelar").hidden=false; $("dlgHist").scrollTo({top:0,behavior:"smooth"}); $("hData").focus(); return; } const id=e.target.dataset.del; if(!id) return; const reg=histRows.find(x=>x.id===Number(id)); if(!confirm(`Excluir esta manutenção?\n\n${reg?fmtData(reg.data)+" - "+reg.descricao:""}\n\nEssa ação não pode ser desfeita.`)) return; const {error}=await sb.from("manutencoes").delete().eq("id",id); if(error) return aviso(msgErro(error),true); if(Number(id)===histEdit) sairEdicaoHist(); await listarHist(); });
+$("btnCsv").onclick=()=>{ const cols=CAMPOS.map(c=>c[0]), cab=CAMPOS.map(c=>c[1]); const cel=v=>`"${String(v ?? "").replace(/"/g,'""')}"`; const csv="\uFEFF"+[cab,...filtradas().map(v=>cols.map(c=>v[c]))].map(l=>l.map(cel).join(";")).join("\r\n"); const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})); a.download=`viaturas-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(a.href); };
+$("lista").addEventListener("click", e=>{ const b=e.target.closest("button"); if(!b) return; const v=frota.find(x=>x.id===Number(b.closest("tr").dataset.id)); if(b.dataset.a==="hist") abrirHist(v); else if(b.dataset.a==="dados") abrirDados(v); else if(b.dataset.a==="rep") abrirReparos(v); else if(b.dataset.a==="ver") abrirForm(v); else if(b.dataset.a==="del") excluir(v); });
+async function aoAlterar(e){ const ki=e.target.closest(".kmin"); if(ki){ const dig=ki.value.replace(/\D/g,""), v=frota.find(x=>x.id===Number(ki.dataset.id)), novo=Number(dig); if(dig===""||!Number.isFinite(novo)){aviso("Informe um KM válido.",true); return render();} if(novo<Number(v.km)){ if(!admin){aviso("O KM não pode ser menor que o atual. Peça a um administrador para corrigir.",true); return render();} if(!confirm(`O KM digitado (${fmtKm(novo)}) é menor que o atual (${fmtKm(v.km)}). Confirmar mesmo assim?`)) return render(); } const {error}=await sb.rpc("atualizar_km",{p_id:v.id,p_km:novo}); if(error){aviso(msgErro(error),true); return render();} v.km=novo; render(); aviso("KM atualizado."); return; } const ob=e.target.closest(".obs"); if(ob){ const {data,error}=await sb.from("frota").update({observacao:ob.value.trim()||null}).eq("id",Number(ob.dataset.id)).select().single(); if(error){aviso(msgErro(error),true); return render();} frota[frota.findIndex(v=>v.id===data.id)]=data; aviso("Observação salva."); return; } const el=e.target.closest(".stsel"); if(!el) return; const {data,error}=await sb.from("frota").update({status:el.value}).eq("id",Number(el.dataset.id)).select().single(); if(error){aviso(msgErro(error),true); return render();} frota[frota.findIndex(v=>v.id===data.id)]=data; render(); aviso("Status atualizado."); }
+$("lista").addEventListener("change",aoAlterar); $("kmLista").addEventListener("change",aoAlterar);
+const TECNICOS=CAMPOS.slice(-7); let dadosId=null;
+function abrirDados(v){ dadosId=v.id; $("dadosTitulo").textContent=`Dados técnicos — ${v.prefixo} / ${v.placa}`; TECNICOS.forEach(([c])=>{ const el=$("d_"+c); el.value=v[c]??""; el.disabled=!admin; }); $("dadosSalvar").hidden=!admin; listarDocs(); $("dlgDados").showModal(); }
+$("formDados").addEventListener("submit", async e=>{ e.preventDefault(); if(!admin) return; const o={}; TECNICOS.forEach(([c])=>{ let val=$("d_"+c).value.trim(); if(c==="chassi") val=val.toLocaleUpperCase("pt-BR"); o[c]=val||null; }); const {data,error}=await sb.from("frota").update(o).eq("id",dadosId).select().single(); if(error) return aviso(msgErro(error),true); frota[frota.findIndex(v=>v.id===data.id)]=data; $("dlgDados").close(); render(); aviso("Dados técnicos salvos."); });
+document.querySelector("thead").addEventListener("click", e=>{ const t=e.target.closest("th[data-ord]"); if(!t) return; const c=t.dataset.ord; ordem={c,d:ordem.c===c?-ordem.d:(c==="alertas"||c==="km"?-1:1)}; render(); });
+const brl=x=>Number(x).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+async function abrirCustos(){ $("cDe").value=`${new Date().getFullYear()}-01-01`; $("cAte").value=new Date().toISOString().slice(0,10); $("dlgCustos").showModal(); await gerarCustos(); }
+async function gerarCustos(){ let data=[], de=0; for(;;){ let q=sb.from("manutencoes").select("viatura_id,data,valor").order("id").range(de,de+999); if($("cDe").value) q=q.gte("data",$("cDe").value); if($("cAte").value) q=q.lte("data",$("cAte").value); const r=await q; if(r.error) return aviso(msgErro(r.error),true); data=data.concat(r.data); if(r.data.length<1000) break; de+=1000; } const porV={}, porM={}; let total=0; data.forEach(r=>{ const val=Number(r.valor)||0; total+=val; const o=porV[r.viatura_id]||={n:0,t:0}; o.n++; o.t+=val; const m=r.data.slice(0,7); porM[m]=(porM[m]||0)+val; }); const lv=Object.entries(porV).sort((a,b)=>b[1].t-a[1].t).map(([id,x])=>{ const v=frota.find(f=>f.id===Number(id)); return `<tr><td>${esc(v?v.prefixo+" / "+v.placa:"Viatura "+id)}</td><td>${x.n}</td><td>${brl(x.t)}</td></tr>`; }).join(""); const lm=Object.entries(porM).sort().map(([m,t])=>`<tr><td>${m.split("-").reverse().join("/")}</td><td>${brl(t)}</td></tr>`).join(""); $("custosRes").innerHTML=`<p style="font-weight:700">${data.length} serviço(s) · total ${brl(total)}</p><div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv||'<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div><h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm||'<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`; }
+$("btnCustos").onclick=abrirCustos; $("cGerar").onclick=gerarCustos;
+async function imprimirFicha(){ const v=frota.find(x=>x.id===dadosId); if(!v) return; const {data}=await sb.from("manutencoes").select("*").eq("viatura_id",v.id).order("data",{ascending:false}); const val=(c,t)=>t==="date"?fmtData(v[c]):(v[c]??"-"); $("ficha").innerHTML=`<h1 style="margin:0">Ficha da viatura ${esc(v.prefixo)} / ${esc(v.placa)}</h1><p>Emitida em ${new Date().toLocaleDateString("pt-BR")}</p><table class="fx">${CAMPOS.map(([c,rot,t])=>`<tr><th>${rot}</th><td>${esc(val(c,t))}</td></tr>`).join("")}</table><h2>Histórico de manutenção</h2><table class="fx"><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th></tr>${(data||[]).map(r=>`<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina)||"-"}</td><td>${r.valor!=null?brl(r.valor):"-"}</td></tr>`).join("")||'<tr><td colspan="5">Nenhum registro.</td></tr>'}</table>`; window.print(); }
+$("btnFicha").onclick=imprimirFicha;
+async function todos(t){ let r=[], de=0; for(;;){ const {data,error}=await sb.from(t).select("*").order("id").range(de,de+999); if(error) throw error; r=r.concat(data); if(data.length<1000) return r; de+=1000; } }
+$("btnBackup").onclick=async()=>{ let m,rp; try{m=await todos("manutencoes"); rp=await todos("reparos");}catch(e){return aviso(msgErro(e),true);} const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([JSON.stringify({gerado_em:new Date().toISOString(),frota,manutencoes:m,reparos:rp},null,1)],{type:"application/json"})); a.download=`backup-viaturas-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(a.href); };
+const BUCKET="documentos";
+async function listarDocs(){ const {data,error}=await sb.storage.from(BUCKET).list(`viatura_${dadosId}`,{sortBy:{column:"created_at",order:"desc"}}); if(error){$("docsLista").innerHTML=""; return aviso(msgErro(error),true);} const arq=data.filter(f=>f.name!==".emptyFolderPlaceholder"); $("docsLista").innerHTML=arq.length?`<table style="min-width:0"><tbody>${arq.map(f=>`<tr><td>${esc(f.name.replace(/^\d+_/,""))}</td><td class="acoes"><button data-abrir="${esc(f.name)}">Abrir</button> ${admin?`<button class="perigo" data-apagar="${esc(f.name)}">Excluir</button>`:""}</td></tr>`).join("")}</tbody></table>`:"<p>Nenhum arquivo anexado.</p>"; }
+$("docArq").addEventListener("change", async e=>{ let falhou=false; for(const f of e.target.files){ if(f.size>10*1024*1024){aviso(`${f.name}: maior que 10 MB.`,true); falhou=true; continue;} const nome=f.name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\w.-]+/g,"_"); const {error}=await sb.storage.from(BUCKET).upload(`viatura_${dadosId}/${Date.now()}_${nome}`,f); if(error){aviso(msgErro(error),true); falhou=true; break;} } e.target.value=""; await listarDocs(); if(!falhou) aviso("Arquivo(s) enviado(s)."); });
+$("docsLista").addEventListener("click", async e=>{ const b=e.target.closest("button"); if(!b) return; if(b.dataset.abrir){ const w=window.open("about:blank","_blank"); const {data,error}=await sb.storage.from(BUCKET).createSignedUrl(`viatura_${dadosId}/${b.dataset.abrir}`,300); if(error||!data?.signedUrl){w?.close(); return aviso(msgErro(error||"Não foi possível abrir o arquivo."),true);} if(w) w.location.href=data.signedUrl; else aviso("O navegador bloqueou a janela. Permita pop-ups e tente de novo.",true); } else if(b.dataset.apagar && confirm(`Excluir este arquivo?\n\n${b.dataset.apagar.replace(/^\d+_/,"")}\n\nEssa ação não pode ser desfeita.`)){ const {error}=await sb.storage.from(BUCKET).remove([`viatura_${dadosId}/${b.dataset.apagar}`]); if(error) return aviso(msgErro(error),true); await listarDocs(); } });
+async function abrirLog(){ $("dlgLog").showModal(); $("logRes").textContent="Carregando..."; const {data,error}=await sb.from("log_alteracoes").select("*").order("id",{ascending:false}).limit(200); if(error){$("logRes").textContent=""; return aviso(msgErro(error),true);} const ROT={concluido:"Concluído",concluido_em:"Concluído em",prioridade:"Prioridade",prazo:"Prazo",descricao:"Descrição",...Object.fromEntries(CAMPOS.map(([c,r])=>[c,r]))}; const fv=x=>x==null||x===""?"vazio":String(x); const linhas=data.map(l=>{ const a=l.antes||{}, d=l.depois||{}, base=l.depois||l.antes||{}; let item,mud; if(l.tabela==="frota") item=`${base.prefixo||""} / ${base.placa||""}`; else { const v=frota.find(f=>f.id===base.viatura_id); item=`${l.tabela==="reparos"?"Reparo":"Manutenção"} · ${v?v.prefixo:"viatura "+base.viatura_id}`; } if(l.acao==="INSERT") mud=l.tabela==="frota"?"Cadastrada":"Registrada: "+esc(base.descricao||""); else if(l.acao==="DELETE") mud="Excluído"+(l.tabela==="manutencoes"?": "+esc(base.descricao||""):""); else mud=Object.keys(d).filter(k=>k!=="criado_em"&&JSON.stringify(a[k])!==JSON.stringify(d[k])).map(k=>`${esc(ROT[k]||k)}: ${esc(fv(a[k]))} → ${esc(fv(d[k]))}`).join("<br>")||"-"; return `<tr><td>${new Date(l.criado_em).toLocaleString("pt-BR")}</td><td>${esc(l.usuario_email||"-")}</td><td>${esc(item)}</td><td>${mud}</td></tr>`; }); $("logRes").innerHTML=linhas.length?`<table style="min-width:640px"><thead><tr><th>Quando</th><th>Quem</th><th>Item</th><th>O que mudou</th></tr></thead><tbody>${linhas.join("")}</tbody></table>`:"<p>Nenhuma alteração registrada ainda.</p>"; }
+$("btnLog").onclick=abrirLog;
+async function abrirUsuarios(){ $("dlgUsr").showModal(); $("usrRes").textContent="Carregando..."; const {data,error}=await sb.rpc("listar_usuarios"); if(error){$("usrRes").textContent=""; return aviso(msgErro(error),true);} $("usrRes").innerHTML=`<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u=>`<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso?new Date(u.ultimo_acesso).toLocaleString("pt-BR"):"nunca"}</td><td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${u.perfil?"":'<option value="" selected disabled>Sem acesso</option>'}${["admin","operador","consulta"].map(p=>`<option value="${p}"${p===u.perfil?" selected":""}>${{admin:"Administrador",operador:"Atualiza KM",consulta:"Consulta"}[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`; }
+$("usrRes").addEventListener("change", async e=>{ const el=e.target.closest(".perfsel"); if(!el) return; const {error}=await sb.rpc("definir_perfil",{uid:el.dataset.id,novo:el.value}); if(error){aviso(msgErro(error),true); return abrirUsuarios();} aviso("Perfil atualizado."); });
+$("btnUsr").onclick=abrirUsuarios;
+let repId=null;
+async function abrirReparos(v){ repId=v.id; $("repTitulo").textContent=`Reparos a fazer — ${v.prefixo} / ${v.placa}`; $("formRep").reset(); $("dlgRep").showModal(); await listarReparos(); }
+async function listarReparos(){ const {data,error}=await sb.from("reparos").select("*").eq("viatura_id",repId).order("criado_em",{ascending:false}); if(error) return aviso(msgErro(error),true); const pend=data.filter(r=>!r.concluido), feitos=data.filter(r=>r.concluido).slice(0,10); const dt=x=>new Date(x).toLocaleDateString("pt-BR"); const prazo=r=>r.prazo?`<br><small${dias(r.prazo)<0?' style="color:var(--verm);font-weight:700"':""}>Prazo: ${fmtData(r.prazo)}${dias(r.prazo)<0?" (atrasado)":""}</small>`:""; $("repLista").innerHTML=(pend.length?`<table style="min-width:0"><tbody>${pend.map(r=>`<tr><td>${r.prioridade==="Urgente"?'<span class="chip v">Urgente</span> ':""}${esc(r.descricao)}${prazo(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td><td class="acoes">${admin?`<button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>`:""}</td></tr>`).join("")}</tbody></table>`:"<p>Nenhum reparo pendente.</p>")+(feitos.length?`<h3>Concluídos</h3><table style="min-width:0"><tbody>${feitos.map(r=>`<tr><td>${esc(r.descricao)}<br><small>Concluído em ${dt(r.concluido_em)}</small></td></tr>`).join("")}</tbody></table>`:""); }
+async function recarregarReparos(){ const r=await sb.from("reparos").select("*").eq("concluido",false); if(!r.error) reparos=r.data; render(); await listarReparos(); }
+$("formRep").addEventListener("submit", async e=>{ e.preventDefault(); if(!admin) return; const {error}=await sb.from("reparos").insert({viatura_id:repId,descricao:$("rDesc").value.trim(),prioridade:$("rPrio").value,prazo:$("rPrazo").value||null}); if(error) return aviso(msgErro(error),true); $("formRep").reset(); await recarregarReparos(); aviso("Reparo registrado. A viatura agora tem um alerta."); });
+$("repLista").addEventListener("click", async e=>{ const b=e.target.closest("button"); if(!b||!admin) return; if(b.dataset.concluir){ const {error}=await sb.from("reparos").update({concluido:true,concluido_em:new Date().toISOString()}).eq("id",Number(b.dataset.concluir)); if(error) return aviso(msgErro(error),true); await recarregarReparos(); aviso("Reparo concluído."); } else if(b.dataset.apagar){ const {data}=await sb.from("reparos").select("descricao").eq("id",Number(b.dataset.apagar)).maybeSingle(); if(!confirm(`Excluir este reparo?\n\n${data?.descricao||""}\n\nEssa ação não pode ser desfeita.`)) return; const {error}=await sb.from("reparos").delete().eq("id",Number(b.dataset.apagar)); if(error) return aviso(msgErro(error),true); await recarregarReparos(); } });
+document.addEventListener("input", e=>{ const el=e.target.closest?.(".kmin, .milhar"); if(!el) return; const antes=el.value.slice(0,el.selectionStart).replace(/\D/g,"").length, d=el.value.replace(/\D/g,""); el.value=d?Number(d).toLocaleString("pt-BR"):""; let n=0,i=0; while(i<el.value.length&&n<antes){ if(/\d/.test(el.value[i])) n++; i++; } el.setSelectionRange(i,i); });
+function renderKm(){ const q=norm($("kmBusca").value.trim()); $("kmLista").innerHTML=frota.filter(v=>v.status!=="Baixada"&&(!q||norm([v.prefixo,v.placa,v.modelo].join(" ")).includes(q))).sort((a,b)=>a.prefixo.localeCompare(b.prefixo,"pt-BR",{numeric:true})).map(v=>`<div class="kmrow"><div><b>${esc(v.prefixo)}</b> <small>${esc(v.placa)} · ${esc(v.modelo)}</small><br>${idadeKm(v)}</div><input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM de ${esc(v.prefixo)}"></div>`).join("")||"<p>Nenhuma viatura.</p>"; }
+$("btnKm").onclick=()=>{ $("kmBusca").value=""; renderKm(); $("dlgKm").showModal(); }; $("kmBusca").addEventListener("input",renderKm);
+$("btnAtualizar").onclick=async()=>{ await carregar(); aviso("Dados atualizados."); };
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden||$("app").hidden||Date.now()-ultimaCarga<120000) return; if(document.activeElement?.closest?.(".kmin, .obs")||document.querySelector("dialog[open]")) return; carregar(); });
+$("btnNova").onclick=()=>abrirForm(null); $("hCancelar").onclick=()=>sairEdicaoHist();
+$("formHist").addEventListener("input", e=>{ if(e.target.id==="hDesc"&&!histEdit) marcarPorDescricao(); atualizarPrevia(); });
+["busca","fStatus","fEmprego","fAlerta"].forEach(id=>$(id).addEventListener("input",render));
+document.querySelectorAll("[data-fechar]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
+async function entrar(){ const {data:{user}}=await sb.auth.getUser(); if(!user) throw new Error("Sessão expirada. Entre novamente."); const {data}=await sb.from("usuarios_perfis").select("perfil").eq("id",user.id).maybeSingle(); if(!data?.perfil){ await sb.auth.signOut(); throw new Error("Seu usuário ainda não foi liberado por um administrador."); } admin=data?.perfil==="admin"; podeKm=admin||data?.perfil==="operador"; $("perfilTxt").textContent=admin?"· Administrador":data?.perfil==="operador"?"· Atualiza KM":"· Consulta"; document.querySelectorAll(".so-admin").forEach(el=>el.hidden=!admin); $("btnKm").hidden=!podeKm; $("login").hidden=true; $("app").hidden=false; await carregar(); }
+$("login").addEventListener("submit", async e=>{ e.preventDefault(); const btn=$("btnEntrar"), erro=$("erroLogin"); erro.hidden=true; btn.disabled=true; btn.textContent="Entrando..."; const {error}=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("senha").value}); btn.disabled=false; btn.textContent="Entrar"; try{ if(error) throw error; await entrar(); }catch(e){ const m=e?.message||String(e); erro.textContent=/invalid login/i.test(m)?"E-mail ou senha incorretos.":/confirm/i.test(m)?"E-mail ainda não confirmado no Supabase.":"Não foi possível entrar: "+m; erro.hidden=false; } });
+$("btnSair").onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+montarCampos(); montarAuto();
+document.querySelectorAll("th.ord").forEach(t=>{ t.tabIndex=0; t.setAttribute("role","button"); t.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); t.click(); } }); });
+$("camposDados").innerHTML=TECNICOS.map(([c,rot])=>`<div><label for="d_${c}">${rot}</label><input id="d_${c}"${c==="chassi"?' style="text-transform:uppercase"':""}></div>`).join("");
+sb.auth.getSession().then(({data})=>{ if(data.session) return entrar(); }).catch(e=>{ const er=$("erroLogin"); er.textContent=e.message||"Não foi possível restaurar a sessão."; er.hidden=false; });
 </script>
 </body>
 </html>
