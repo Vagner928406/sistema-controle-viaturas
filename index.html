@@ -225,7 +225,7 @@ const CAMPOS = [
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Baixada"];
 
-let admin = false, frota = [], reparos = [], editando = null, histId = null, histRows = [], histEdit = null;
+let admin = false, podeKm = false, frota = [], reparos = [], editando = null, histId = null, histRows = [], histEdit = null;
 
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtKm = v => v == null ? "-" : Number(v).toLocaleString("pt-BR");
@@ -324,7 +324,7 @@ function render() {
     return `<tr data-id="${v.id}" class="${v.status === "Baixada" ? "baixada" : ""}">
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
-      <td>${admin ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}</td>
+      <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}</td>
       <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}</td>
       <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
@@ -542,10 +542,13 @@ $("lista").addEventListener("change", async e => {
   if (ki) {
     const dig = ki.value.replace(/\D/g, ""), v = frota.find(x => x.id === Number(ki.dataset.id)), novo = Number(dig);
     if (dig === "" || !Number.isFinite(novo)) { aviso("Informe um KM válido.", true); return render(); }
-    if (novo < Number(v.km) && !confirm(`O KM digitado (${fmtKm(novo)}) é menor que o atual (${fmtKm(v.km)}). Confirmar mesmo assim?`)) return render();
-    const { data, error } = await sb.from("frota").update({ km: novo }).eq("id", v.id).select().single();
+    if (novo < Number(v.km)) {
+      if (!admin) { aviso("O KM não pode ser menor que o atual. Peça a um administrador para corrigir.", true); return render(); }
+      if (!confirm(`O KM digitado (${fmtKm(novo)}) é menor que o atual (${fmtKm(v.km)}). Confirmar mesmo assim?`)) return render();
+    }
+    const { error } = await sb.rpc("atualizar_km", { p_id: v.id, p_km: novo });
     if (error) { aviso(msgErro(error), true); return render(); }
-    frota[frota.findIndex(x => x.id === data.id)] = data; render(); aviso("KM atualizado."); return;
+    v.km = novo; render(); aviso("KM atualizado."); return;
   }
   const ob = e.target.closest(".obs");
   if (ob) {
@@ -710,8 +713,8 @@ async function abrirUsuarios() {
   if (error) { $("usrRes").textContent = ""; return aviso(msgErro(error), true); }
   $("usrRes").innerHTML = `<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u =>
     `<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString("pt-BR") : "nunca"}</td>
-     <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${["admin", "consulta"].map(p =>
-       `<option value="${p}"${p === u.perfil ? " selected" : ""}>${p === "admin" ? "Administrador" : "Consulta"}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
+     <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${["admin", "operador", "consulta"].map(p =>
+       `<option value="${p}"${p === u.perfil ? " selected" : ""}>${{ admin: "Administrador", operador: "Atualiza KM", consulta: "Consulta" }[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
 }
 $("usrRes").addEventListener("change", async e => {
   const el = e.target.closest(".perfsel"); if (!el) return;
@@ -789,7 +792,8 @@ async function entrar() {
   const { data: { user } } = await sb.auth.getUser();
   const { data } = await sb.from("usuarios_perfis").select("perfil").eq("id", user.id).maybeSingle();
   admin = data?.perfil === "admin";
-  $("perfilTxt").textContent = admin ? "· Administrador" : "· Consulta";
+  podeKm = admin || data?.perfil === "operador";
+  $("perfilTxt").textContent = admin ? "· Administrador" : data?.perfil === "operador" ? "· Atualiza KM" : "· Consulta";
   document.querySelectorAll(".so-admin").forEach(el => el.hidden = !admin);
   $("login").hidden = true; $("app").hidden = false;
   await carregar();
