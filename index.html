@@ -432,11 +432,14 @@ async function excluir(v) {
   frota = frota.filter(x => x.id !== v.id); reparos = reparos.filter(x => x.viatura_id !== v.id); render();
   // apaga também os arquivos anexados, que ficariam sem dono no armazenamento
   const pasta = `viatura_${v.id}`;
-  const { data: arq } = await sb.storage.from(BUCKET).list(pasta);
-  const nomes = (arq || []).map(f => `${pasta}/${f.name}`);
-  if (nomes.length) {
+  for (let tent = 0; tent < 20; tent++) {
+    const { data: arq, error: errL } = await sb.storage.from(BUCKET).list(pasta, { limit: 100 });
+    if (errL) return aviso("Viatura excluída, mas não foi possível listar os arquivos anexados: " + msgErro(errL), true);
+    const nomes = (arq || []).map(f => `${pasta}/${f.name}`);
+    if (!nomes.length) break;
     const rm = await sb.storage.from(BUCKET).remove(nomes);
     if (rm.error) return aviso("Viatura excluída, mas não foi possível apagar os arquivos anexados: " + msgErro(rm.error), true);
+    if (nomes.length < 100) break;
   }
   aviso("Viatura excluída.");
 }
@@ -475,14 +478,6 @@ function somarMeses(iso, n) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
 
-function lerIntervalos() { try { return JSON.parse(localStorage.getItem("intervalosManut")) || {}; } catch { return {}; } }
-
-function salvarIntervalos() {
-  const o = { meses: $("i_meses").value };
-  SERVICOS.forEach(([k]) => o[k] = $("i_" + k).value.replace(/\D/g, ""));
-  try { localStorage.setItem("intervalosManut", JSON.stringify(o)); } catch {}
-}
-
 function montarAuto() {
   const v = frota.find(x => x.id === histId) || {};
   $("hAutoCampos").innerHTML = SERVICOS.map(([k, nome, , pad, ic]) =>
@@ -509,7 +504,6 @@ function atualizarPrevia() {
     if (r[col] != null) p.push(`${nome}: ${fmtKm(r[col])} km` + (k === "oleo" && r.troca_oleo ? ` ou ${fmtData(r.troca_oleo)}` : ""));
   });
   $("hAutoPrevia").textContent = p.length ? "Próximas trocas: " + p.join(" · ") : "Informe data e KM e marque o que foi feito para calcular.";
-  salvarIntervalos();
 }
 
 function marcarPorDescricao() {
@@ -602,14 +596,18 @@ async function aoAlterar(e) {
   const ki = e.target.closest(".kmin");
   if (ki) {
     const dig = ki.value.replace(/\D/g, ""), v = frota.find(x => x.id === Number(ki.dataset.id)), novo = Number(dig);
-    if (dig === "" || !Number.isFinite(novo)) { aviso("Informe um KM válido.", true); return render(); }
+    const reverte = () => { if (ki.closest("#kmLista")) ki.value = fmtKm(v.km ?? 0); render(); };
+    if (dig === "" || !Number.isFinite(novo)) { aviso("Informe um KM válido.", true); return reverte(); }
     if (novo < Number(v.km)) {
-      if (!admin) { aviso("O KM não pode ser menor que o atual. Peça a um administrador para corrigir.", true); return render(); }
-      if (!confirm(`O KM digitado (${fmtKm(novo)}) é menor que o atual (${fmtKm(v.km)}). Confirmar mesmo assim?`)) return render();
+      if (!admin) { aviso("O KM não pode ser menor que o atual. Peça a um administrador para corrigir.", true); return reverte(); }
+      if (!confirm(`O KM digitado (${fmtKm(novo)}) é menor que o atual (${fmtKm(v.km)}). Confirmar mesmo assim?`)) return reverte();
     }
     const { error } = await sb.rpc("atualizar_km", { p_id: v.id, p_km: novo });
-    if (error) { aviso(msgErro(error), true); return render(); }
-    v.km = novo; render(); aviso("KM atualizado."); return;
+    if (error) { aviso(msgErro(error), true); return reverte(); }
+    v.km = novo; v.km_atualizado_em = new Date().toISOString(); render();
+    const lin = ki.closest("#kmLista") && ki.closest(".kmrow");
+    if (lin) { ki.value = fmtKm(novo); lin.querySelector(".idk").innerHTML = idadeKm(v); }
+    aviso("KM atualizado."); return;
   }
   const ob = e.target.closest(".obs");
   if (ob) {
@@ -719,17 +717,25 @@ async function todos(t) {
   }
 }
 $("btnBackup").onclick = async () => {
-  let m, rp;
-  try { m = await todos("manutencoes"); rp = await todos("reparos"); } catch (e) { return aviso(msgErro(e), true); }
+  let fr, m, rp, pf = [];
+  const anexos = {};
+  try {
+    fr = await todos("frota"); m = await todos("manutencoes"); rp = await todos("reparos");
+    for (const v of fr) {
+      const { data } = await sb.storage.from(BUCKET).list(`viatura_${v.id}`, { limit: 1000 });
+      anexos[v.prefixo] = (data || []).map(f => f.name).filter(n => n !== ".emptyFolderPlaceholder");
+    }
+  } catch (e) { return aviso(msgErro(e), true); }
+  try { pf = await todos("usuarios_perfis"); } catch {}
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota, manutencoes: m, reparos: rp }, null, 1)], { type: "application/json" }));
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota: fr, manutencoes: m, reparos: rp, perfis: pf, anexos_nomes: anexos }, null, 1)], { type: "application/json" }));
   a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
 };
 
 // ---------- Documentos e fotos ----------
 const BUCKET = "documentos";
 async function listarDocs() {
-  const { data, error } = await sb.storage.from(BUCKET).list(`viatura_${dadosId}`, { sortBy: { column: "created_at", order: "desc" } });
+  const { data, error } = await sb.storage.from(BUCKET).list(`viatura_${dadosId}`, { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
   if (error) { $("docsLista").innerHTML = ""; return aviso(msgErro(error), true); }
   const arq = data.filter(f => f.name !== ".emptyFolderPlaceholder");
   $("docsLista").innerHTML = arq.length
@@ -863,7 +869,7 @@ function renderKm() {
   const q = norm($("kmBusca").value.trim());
   $("kmLista").innerHTML = frota.filter(v => v.status !== "Baixada" && (!q || norm([v.prefixo, v.placa, v.modelo].join(" ")).includes(q)))
     .sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }))
-    .map(v => `<div class="kmrow"><div><b>${esc(v.prefixo)}</b> <small>${esc(v.placa)} · ${esc(v.modelo)}</small><br>${idadeKm(v)}</div>
+    .map(v => `<div class="kmrow"><div><b>${esc(v.prefixo)}</b> <small>${esc(v.placa)} · ${esc(v.modelo)}</small><br><span class="idk">${idadeKm(v)}</span></div>
       <input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM de ${esc(v.prefixo)}"></div>`).join("") || "<p>Nenhuma viatura.</p>";
 }
 $("btnKm").onclick = () => { $("kmBusca").value = ""; renderKm(); $("dlgKm").showModal(); };
