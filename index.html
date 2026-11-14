@@ -121,6 +121,12 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
     </div>
     <label for="hDesc">Serviço realizado</label>
     <input id="hDesc" placeholder="Ex.: troca de óleo e filtros" required>
+    <fieldset id="hAuto" style="border:1px solid var(--borda);border-radius:8px;margin:14px 0 0;padding:6px 12px 12px">
+      <legend style="font-size:12px;font-weight:700;color:var(--azul2);padding:0 6px">Calcular as próximas trocas automaticamente</legend>
+      <small>Marque o que foi feito e informe o intervalo (em km). Os valores ficam salvos para a próxima vez.</small>
+      <div class="grade" id="hAutoCampos"></div>
+      <p id="hAutoPrevia" style="margin:10px 0 0;font-weight:600;color:var(--azul2)"></p>
+    </fieldset>
     <div class="rodape"><button type="submit" class="ok" id="hSalvar">Registrar manutenção</button><button type="button" class="sec" id="hCancelar" hidden>Cancelar edição</button></div>
   </form>
   <p id="histTotal" style="margin:14px 0 0;font-weight:600"></p>
@@ -307,7 +313,72 @@ function sairEdicaoHist() {
   histEdit = null;
   $("hSalvar").textContent = "Registrar manutenção"; $("hCancelar").hidden = true;
   $("formHist").reset();
+  montarAuto(); $("hAuto").hidden = false;
   const v = frota.find(x => x.id === histId); $("hKm").value = v?.km ?? "";
+  atualizarPrevia();
+}
+
+// ---------- Próximas trocas automáticas ----------
+const SERVICOS = [
+  ["oleo", "Troca de óleo", "km_troca_oleo", 10000],
+  ["filtro_oleo", "Filtro de óleo", "km_filtro_oleo", 10000],
+  ["filtro_comb", "Filtro de combustível", "km_filtro_combustivel", 20000],
+  ["filtro_ar", "Filtro de ar", "km_filtro_ar", 20000]
+];
+
+function somarMeses(iso, n) {
+  const [a, m, d] = iso.split("-").map(Number);
+  const dt = new Date(a, m - 1 + n, 1);
+  const ultimo = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+  dt.setDate(Math.min(d, ultimo));
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+function lerIntervalos() { try { return JSON.parse(localStorage.getItem("intervalosManut")) || {}; } catch { return {}; } }
+
+function salvarIntervalos() {
+  const o = { meses: $("i_meses").value };
+  SERVICOS.forEach(([k]) => o[k] = $("i_" + k).value);
+  try { localStorage.setItem("intervalosManut", JSON.stringify(o)); } catch {}
+}
+
+function montarAuto() {
+  const g = lerIntervalos();
+  $("hAutoCampos").innerHTML = SERVICOS.map(([k, nome, , pad]) =>
+    `<div><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="a_${k}" style="width:auto"> ${nome}</label>
+     <input type="number" id="i_${k}" min="1" value="${g[k] || pad}" placeholder="Intervalo em km" aria-label="Intervalo de ${nome} em km"></div>`).join("")
+    + `<div><label for="i_meses">Prazo do óleo em meses (0 = só por KM)</label><input type="number" id="i_meses" min="0" value="${g.meses ?? 6}"></div>`;
+}
+
+function calcProximas() {
+  const data = $("hData").value, kmTxt = $("hKm").value, km = Number(kmTxt), r = {};
+  if (!data || kmTxt === "" || !Number.isFinite(km)) return r;
+  SERVICOS.forEach(([k, , col]) => {
+    const iv = Number($("i_" + k).value);
+    if ($("a_" + k).checked && iv > 0) r[col] = km + iv;
+  });
+  const meses = Number($("i_meses").value);
+  if ($("a_oleo").checked && meses > 0) r.troca_oleo = somarMeses(data, meses);
+  return r;
+}
+
+function atualizarPrevia() {
+  const r = calcProximas(), p = [];
+  SERVICOS.forEach(([k, nome, col]) => {
+    if (r[col] != null) p.push(`${nome}: ${fmtKm(r[col])} km` + (k === "oleo" && r.troca_oleo ? ` ou ${fmtData(r.troca_oleo)}` : ""));
+  });
+  $("hAutoPrevia").textContent = p.length ? "Próximas trocas: " + p.join(" · ") : "Informe data e KM e marque o que foi feito para calcular.";
+  salvarIntervalos();
+}
+
+function marcarPorDescricao() {
+  const t = $("hDesc").value.toLowerCase();
+  if (!/troc|substitu/.test(t)) return; // só sugere quando o texto fala em troca/substituição
+  const marcar = (k, ok) => { if (ok) $("a_" + k).checked = true; };
+  marcar("oleo", /[oó]leo/.test(t));
+  marcar("filtro_oleo", /filtro.*[oó]leo|[oó]leo.*filtro/.test(t));
+  marcar("filtro_comb", /combust/.test(t));
+  marcar("filtro_ar", /filtro.*\bar\b|\bar\b.*filtro/.test(t));
 }
 
 async function listarHist() {
@@ -333,7 +404,10 @@ $("formHist").addEventListener("submit", async e => {
   if (error) return aviso(msgErro(error), true);
   // atualiza a viatura: última revisão e KM (apenas se o registro for mais recente/maior)
   const v = frota.find(x => x.id === histId), up = {};
+  const maisRecente = !v.ultima_revisao || reg.data >= v.ultima_revisao;
+  const prox = !histEdit && maisRecente ? calcProximas() : {};
   if (!v.ultima_revisao || reg.data > v.ultima_revisao) up.ultima_revisao = reg.data;
+  Object.assign(up, prox);
   if (reg.km > (v.km ?? 0)) up.km = reg.km;
   if (Object.keys(up).length) {
     const { data } = await sb.from("frota").update(up).eq("id", histId).select().single();
@@ -341,13 +415,13 @@ $("formHist").addEventListener("submit", async e => {
   }
   const editou = !!histEdit;
   sairEdicaoHist();
-  await listarHist(); aviso(editou ? "Manutenção atualizada." : "Manutenção registrada.");
+  await listarHist(); aviso(editou ? "Manutenção atualizada." : Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
 });
 
 $("histLista").addEventListener("click", async e => {
   if (e.target.dataset.edit) {
     const r = histRows.find(x => x.id === Number(e.target.dataset.edit)); if (!r) return;
-    histEdit = r.id;
+    histEdit = r.id; $("hAuto").hidden = true;
     $("hData").value = r.data; $("hKm").value = r.km; $("hOficina").value = r.oficina ?? "";
     $("hValor").value = r.valor ?? ""; $("hDesc").value = r.descricao;
     $("hSalvar").textContent = "Salvar alterações"; $("hCancelar").hidden = false;
@@ -417,6 +491,10 @@ $("formDados").addEventListener("submit", async e => {
 
 $("btnNova").onclick = () => abrirForm(null);
 $("hCancelar").onclick = () => sairEdicaoHist();
+$("formHist").addEventListener("input", e => {
+  if (e.target.id === "hDesc" && !histEdit) marcarPorDescricao();
+  atualizarPrevia();
+});
 ["busca", "fStatus", "fAlerta"].forEach(id => $(id).addEventListener("input", render));
 document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.closest("dialog").close());
 
@@ -452,6 +530,7 @@ $("login").addEventListener("submit", async e => {
 $("btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 
 montarCampos();
+montarAuto();
 $("camposDados").innerHTML = TECNICOS.map(([c, rot]) => `<div><label for="d_${c}">${rot}</label><input id="d_${c}"${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`).join("");
 sb.auth.getSession().then(({ data }) => { if (data.session) entrar(); });
 </script>
