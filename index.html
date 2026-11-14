@@ -45,6 +45,8 @@ td.acoes button[data-a="dados"]{background:#1f8a4c;color:#fff}
 td.acoes button[data-a="rep"]{background:#c95a00;color:#fff}
 td.acoes button[data-a="rep"].pend{font-weight:700;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--verm)}
 td.acoes button[data-a="ver"]{background:#f2b53a;color:#3d2c00}
+.kmrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--borda)}
+.kmrow .kmin{width:130px;font-size:16px;padding:9px}
 .kmin{width:96px;padding:5px 6px}
 th.ord{cursor:pointer;user-select:none}th.ord::after{content:attr(data-seta)}
 #ficha{display:none}.fx{width:100%;border-collapse:collapse;margin-bottom:12px;min-width:0!important}
@@ -88,6 +90,8 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 <header>
   <img src="logo-viaturas-fundo-transparente.png" alt="" onerror="this.remove()">
   <h1>Controle de Manutenção de Viaturas <small id="perfilTxt"></small></h1>
+  <button class="sec" id="btnKm" hidden>Atualizar KM</button>
+  <button class="sec" id="btnAtualizar" title="Recarregar os dados">Atualizar</button>
   <button class="sec" id="btnCustos">Custos</button>
   <button class="sec so-admin" id="btnLog" hidden>Alterações</button>
   <button class="sec so-admin" id="btnUsr" hidden>Usuários</button>
@@ -162,7 +166,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 
 <dialog id="dlgUsr">
   <div class="cab"><h2>Usuários e permissões</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
-  <p><small>Para criar um usuário novo: painel do Supabase &gt; Authentication &gt; Users &gt; Add user. Depois ele aparece aqui como “Consulta”.</small></p>
+  <p><small>Para criar um usuário novo: painel do Supabase &gt; Authentication &gt; Users &gt; Add user. Depois ele aparece aqui como “Sem acesso”: escolha um perfil para liberar.</small></p>
   <div class="hist" id="usrRes" style="max-height:60vh"></div>
 </dialog>
 
@@ -195,6 +199,12 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <div class="hist" id="docsLista"></div>
 </dialog>
 
+<dialog id="dlgKm">
+  <div class="cab"><h2>Atualizar KM</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
+  <input type="search" id="kmBusca" placeholder="Buscar prefixo, placa ou modelo" aria-label="Buscar viatura" style="margin-top:10px">
+  <div id="kmLista" style="max-height:65vh;overflow:auto;margin-top:8px"></div>
+</dialog>
+<datalist id="listaEmpregos"></datalist>
 <div id="ficha"></div>
 <div id="aviso" popover="manual" role="status"></div>
 
@@ -292,10 +302,16 @@ function alertas(v) {
 }
 
 // ---------- Dados ----------
+let ultimaCarga = 0;
+function idadeKm(v) {
+  if (!v.km_atualizado_em) return "";
+  const d = Math.floor((Date.now() - new Date(v.km_atualizado_em)) / 864e5);
+  return `<small${d > 30 ? ' style="color:var(--verm);font-weight:700"' : ""}>KM atualizado ${d <= 0 ? "hoje" : "há " + d + " dia(s)"}</small>`;
+}
 async function carregar() {
   const { data, error } = await sb.from("frota").select("*").order("prefixo");
   if (error) { aviso(msgErro(error), true); return; }
-  frota = data;
+  frota = data; ultimaCarga = Date.now();
   const r = await sb.from("reparos").select("*").eq("concluido", false).order("criado_em");
   if (r.error) aviso(msgErro(r.error), true); else reparos = r.data;
   render();
@@ -312,7 +328,12 @@ function render() {
   const sel = $("fEmprego"), atual = sel.value;
   const emps = [...new Set(frota.map(v => v.emprego).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
   sel.innerHTML = '<option value="">Todos os empregos</option>' + emps.map(e => `<option${e === atual ? " selected" : ""}>${esc(e)}</option>`).join("");
-  document.querySelectorAll("th[data-ord]").forEach(t => t.dataset.seta = t.dataset.ord === ordem.c ? (ordem.d > 0 ? " ▲" : " ▼") : "");
+  $("listaEmpregos").innerHTML = emps.map(e => `<option value="${esc(e)}">`).join("");
+  document.querySelectorAll("th[data-ord]").forEach(t => {
+    const at = t.dataset.ord === ordem.c;
+    t.dataset.seta = at ? (ordem.d > 0 ? " ▲" : " ▼") : "";
+    t.setAttribute("aria-sort", at ? (ordem.d > 0 ? "ascending" : "descending") : "none");
+  });
   const n = s => frota.filter(v => v.status === s).length;
   const comAlerta = frota.filter(v => alertas(v).length).length;
   $("resumo").innerHTML = [["Total", frota.length],["Disponíveis", n("Disponível")],["Em manutenção", n("Manutenção")],
@@ -324,7 +345,7 @@ function render() {
     return `<tr data-id="${v.id}" class="${v.status === "Baixada" ? "baixada" : ""}">
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
-      <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}</td>
+      <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}<br>${idadeKm(v)}</td>
       <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}</td>
       <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
@@ -343,7 +364,7 @@ function montarCampos() {
     if (grupo) html += `<h3>${grupo}</h3>`;
     const ctl = tipo === "select"
       ? `<select id="f_${c}" required>${STATUS.map(s => `<option>${s}</option>`).join("")}</select>`
-      : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""}>`;
+      : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""} ${c === "emprego" ? 'list="listaEmpregos"' : ""}>`;
     html += `<div><label for="f_${c}">${rot}</label>${ctl}</div>`;
   });
   $("campos").innerHTML = html;
@@ -369,8 +390,15 @@ $("form").addEventListener("submit", async e => {
   }
   const anos = String(o.ano).split("/");
   if (!/^\d{4}(\/\d{4})?$/.test(o.ano) || anos.some(a => a < 1950 || a > 2100)) return aviso("Informe o ano como AAAA ou AAAA/AAAA.", true);
+  let alvo = o;
+  if (editando) {
+    const orig = frota.find(v => v.id === editando) || {};
+    alvo = Object.fromEntries(Object.entries(o).filter(([k, v]) => (orig[k] ?? null) !== v));
+    if (!Object.keys(alvo).length) { $("dlgForm").close(); return aviso("Nenhuma alteração para salvar."); }
+  }
+  if (alvo.placa !== undefined && !/^[A-Z]{3}-?\d[A-Z0-9]\d{2}$/.test(alvo.placa)) return aviso("Placa inválida. Use o formato ABC1D23 ou ABC-1234.", true);
   const req = editando
-    ? sb.from("frota").update(o).eq("id", editando).select().single()
+    ? sb.from("frota").update(alvo).eq("id", editando).select().single()
     : sb.from("frota").insert(o).select().single();
   const { data, error } = await req;
   if (error) return aviso(msgErro(error), true);
@@ -392,6 +420,7 @@ async function abrirHist(v) {
   histId = v.id;
   $("histTitulo").textContent = `Histórico — ${v.prefixo} / ${v.placa}`;
   sairEdicaoHist();
+  $("hData").max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   $("dlgHist").showModal(); await listarHist();
 }
 
@@ -495,13 +524,17 @@ $("formHist").addEventListener("submit", async e => {
   if (!v.ultima_revisao || reg.data > v.ultima_revisao) up.ultima_revisao = reg.data;
   Object.assign(up, prox);
   if (reg.km > (v.km ?? 0)) up.km = reg.km;
+  let falha = "";
   if (Object.keys(up).length) {
-    const { data } = await sb.from("frota").update(up).eq("id", histId).select().single();
-    if (data) { frota[frota.findIndex(x => x.id === histId)] = data; render(); }
+    const r2 = await sb.from("frota").update(up).eq("id", histId).select().single();
+    if (r2.error) falha = msgErro(r2.error);
+    else { frota[frota.findIndex(x => x.id === histId)] = r2.data; render(); }
   }
   const editou = !!histEdit;
   sairEdicaoHist();
-  await listarHist(); aviso(editou ? "Manutenção atualizada." : Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
+  await listarHist();
+  if (falha) return aviso("Manutenção salva, mas a viatura não foi atualizada: " + falha, true);
+  aviso(editou ? "Manutenção atualizada." : Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
 });
 
 $("histLista").addEventListener("click", async e => {
@@ -537,7 +570,7 @@ $("lista").addEventListener("click", e => {
   const v = frota.find(x => x.id === Number(b.closest("tr").dataset.id));
   if (b.dataset.a === "hist") abrirHist(v); else if (b.dataset.a === "dados") abrirDados(v); else if (b.dataset.a === "rep") abrirReparos(v); else if (b.dataset.a === "ver") abrirForm(v); else if (b.dataset.a === "del") excluir(v);
 });
-$("lista").addEventListener("change", async e => {
+async function aoAlterar(e) {
   const ki = e.target.closest(".kmin");
   if (ki) {
     const dig = ki.value.replace(/\D/g, ""), v = frota.find(x => x.id === Number(ki.dataset.id)), novo = Number(dig);
@@ -560,7 +593,9 @@ $("lista").addEventListener("change", async e => {
   const { data, error } = await sb.from("frota").update({ status: el.value }).eq("id", Number(el.dataset.id)).select().single();
   if (error) { aviso(msgErro(error), true); return render(); }
   frota[frota.findIndex(v => v.id === data.id)] = data; render(); aviso("Status atualizado.");
-});
+}
+$("lista").addEventListener("change", aoAlterar);
+$("kmLista").addEventListener("change", aoAlterar);
 // ---------- Dados técnicos ----------
 const TECNICOS = CAMPOS.slice(-7);
 let dadosId = null;
@@ -602,11 +637,17 @@ async function abrirCustos() {
   $("dlgCustos").showModal(); await gerarCustos();
 }
 async function gerarCustos() {
-  let q = sb.from("manutencoes").select("viatura_id,data,valor");
-  if ($("cDe").value) q = q.gte("data", $("cDe").value);
-  if ($("cAte").value) q = q.lte("data", $("cAte").value);
-  const { data, error } = await q;
-  if (error) return aviso(msgErro(error), true);
+  let data = [], de = 0;
+  for (;;) {
+    let q = sb.from("manutencoes").select("viatura_id,data,valor").order("id").range(de, de + 999);
+    if ($("cDe").value) q = q.gte("data", $("cDe").value);
+    if ($("cAte").value) q = q.lte("data", $("cAte").value);
+    const r = await q;
+    if (r.error) return aviso(msgErro(r.error), true);
+    data = data.concat(r.data);
+    if (r.data.length < 1000) break;
+    de += 1000;
+  }
   const porV = {}, porM = {}; let total = 0;
   data.forEach(r => {
     const val = Number(r.valor) || 0; total += val;
@@ -639,11 +680,21 @@ async function imprimirFicha() {
 $("btnFicha").onclick = imprimirFicha;
 
 // ---------- Backup ----------
+async function todos(t) {
+  let r = [], de = 0;
+  for (;;) {
+    const { data, error } = await sb.from(t).select("*").order("id").range(de, de + 999);
+    if (error) throw error;
+    r = r.concat(data);
+    if (data.length < 1000) return r;
+    de += 1000;
+  }
+}
 $("btnBackup").onclick = async () => {
-  const { data: m, error } = await sb.from("manutencoes").select("*").order("id");
-  if (error) return aviso(msgErro(error), true);
+  let m, rp;
+  try { m = await todos("manutencoes"); rp = await todos("reparos"); } catch (e) { return aviso(msgErro(e), true); }
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota, manutencoes: m }, null, 1)], { type: "application/json" }));
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota, manutencoes: m, reparos: rp }, null, 1)], { type: "application/json" }));
   a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
 };
 
@@ -674,7 +725,7 @@ $("docsLista").addEventListener("click", async e => {
     const w = window.open("about:blank", "_blank");
     const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(`viatura_${dadosId}/${b.dataset.abrir}`, 300);
     if (error || !data?.signedUrl) { w?.close(); return aviso(msgErro(error || "Não foi possível abrir o arquivo."), true); }
-    w.location.href = data.signedUrl;
+    if (w) w.location.href = data.signedUrl; else aviso("O navegador bloqueou a janela. Permita pop-ups e tente de novo.", true);
   } else if (b.dataset.apagar && confirm("Excluir este arquivo?")) {
     const { error } = await sb.storage.from(BUCKET).remove([`viatura_${dadosId}/${b.dataset.apagar}`]);
     if (error) return aviso(msgErro(error), true);
@@ -713,7 +764,7 @@ async function abrirUsuarios() {
   if (error) { $("usrRes").textContent = ""; return aviso(msgErro(error), true); }
   $("usrRes").innerHTML = `<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u =>
     `<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString("pt-BR") : "nunca"}</td>
-     <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${["admin", "operador", "consulta"].map(p =>
+     <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${u.perfil ? "" : '<option value="" selected disabled>Sem acesso</option>'}${["admin", "operador", "consulta"].map(p =>
        `<option value="${p}"${p === u.perfil ? " selected" : ""}>${{ admin: "Administrador", operador: "Atualiza KM", consulta: "Consulta" }[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
 }
 $("usrRes").addEventListener("change", async e => {
@@ -778,6 +829,25 @@ document.addEventListener("input", e => {
   el.setSelectionRange(i, i);
 });
 
+// ---------- Atualizar KM (tela simples) ----------
+function renderKm() {
+  const q = norm($("kmBusca").value.trim());
+  $("kmLista").innerHTML = frota.filter(v => v.status !== "Baixada" && (!q || norm([v.prefixo, v.placa, v.modelo].join(" ")).includes(q)))
+    .sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }))
+    .map(v => `<div class="kmrow"><div><b>${esc(v.prefixo)}</b> <small>${esc(v.placa)} · ${esc(v.modelo)}</small><br>${idadeKm(v)}</div>
+      <input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM de ${esc(v.prefixo)}"></div>`).join("") || "<p>Nenhuma viatura.</p>";
+}
+$("btnKm").onclick = () => { $("kmBusca").value = ""; renderKm(); $("dlgKm").showModal(); };
+$("kmBusca").addEventListener("input", renderKm);
+
+// ---------- Atualizar dados ----------
+$("btnAtualizar").onclick = async () => { await carregar(); aviso("Dados atualizados."); };
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || $("app").hidden || Date.now() - ultimaCarga < 120000) return;
+  if (document.activeElement?.closest?.(".kmin, .obs") || document.querySelector("dialog[open]")) return;
+  carregar();
+});
+
 $("btnNova").onclick = () => abrirForm(null);
 $("hCancelar").onclick = () => sairEdicaoHist();
 $("formHist").addEventListener("input", e => {
@@ -790,11 +860,14 @@ document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.clos
 // ---------- Login ----------
 async function entrar() {
   const { data: { user } } = await sb.auth.getUser();
+  if (!user) throw new Error("Sessão expirada. Entre novamente.");
   const { data } = await sb.from("usuarios_perfis").select("perfil").eq("id", user.id).maybeSingle();
+  if (!data?.perfil) { await sb.auth.signOut(); throw new Error("Seu usuário ainda não foi liberado por um administrador."); }
   admin = data?.perfil === "admin";
   podeKm = admin || data?.perfil === "operador";
   $("perfilTxt").textContent = admin ? "· Administrador" : data?.perfil === "operador" ? "· Atualiza KM" : "· Consulta";
   document.querySelectorAll(".so-admin").forEach(el => el.hidden = !admin);
+  $("btnKm").hidden = !podeKm;
   $("login").hidden = true; $("app").hidden = false;
   await carregar();
 }
@@ -821,8 +894,13 @@ $("btnSair").onclick = async () => { await sb.auth.signOut(); location.reload();
 
 montarCampos();
 montarAuto();
+document.querySelectorAll("th.ord").forEach(t => {
+  t.tabIndex = 0; t.setAttribute("role", "button");
+  t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.click(); } });
+});
 $("camposDados").innerHTML = TECNICOS.map(([c, rot]) => `<div><label for="d_${c}">${rot}</label><input id="d_${c}"${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`).join("");
-sb.auth.getSession().then(({ data }) => { if (data.session) entrar(); });
+sb.auth.getSession().then(({ data }) => { if (data.session) return entrar(); })
+  .catch(e => { const er = $("erroLogin"); er.textContent = e.message || "Não foi possível restaurar a sessão."; er.hidden = false; });
 </script>
 </body>
 </html>
