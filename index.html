@@ -276,9 +276,12 @@ const CAMPOS = [
   ["venc_licenciamento","Vencimento do licenciamento","date","Vencimento de documentos"],["venc_seguro","Vencimento do seguro","date"],
   ["venc_ipva","Vencimento do IPVA","date"],["venc_vistoria","Vencimento da vistoria","date"],
   ["cartao_abastecimento","Cartão de abastecimento","text","Documentos e dados técnicos"],["renavam","Renavam","text"],["chassi","Chassi","text"],
-  ["numeracao_pneu","Numeração do pneu","text"],["numero_motor","Número do motor","text"],["patrimonio","Patrimônio","text"],["combustivel","Combustível","text"]
+  ["numeracao_pneu","Numeração do pneu","text"],["numero_motor","Número do motor","text"],["patrimonio","Patrimônio","text"],
+  ["tipo_aquisicao","Tipo de aquisição","text"],["orgao_repassador","Órgão repassador","text"],["nome_convenio","Nº Convênio","text"],
+  ["data_aquisicao","Data de aquisição","date"],["valor_aquisicao","Valor de aquisição (R$)","number"],["combustivel","Combustível","text"]
 ];
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
+const DECIMAIS = ["valor_aquisicao"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Baixada"];
 
 let admin = false, podeKm = false, frota = [], reparos = [], editando = null, histId = null, histRows = [], histEdit = null;
@@ -423,9 +426,12 @@ function montarCampos() {
   let html = "";
   CAMPOS.forEach(([c, rot, tipo, grupo]) => {
     if (grupo) html += `<h3>${grupo}</h3>`;
+    const decimal = DECIMAIS.includes(c);
     const ctl = tipo === "select"
       ? `<select id="f_${c}" required>${STATUS.map(s => `<option>${s}</option>`).join("")}</select>`
-      : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""} ${c === "emprego" ? 'list="listaEmpregos"' : ""}>`;
+      : decimal
+        ? `<input id="f_${c}" type="number" min="0" step="0.01">`
+      : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" && c !== "data_aquisicao" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""} ${c === "emprego" ? 'list="listaEmpregos"' : ""}>`;
     html += `<div><label for="f_${c}">${rot}</label>${ctl}</div>`;
   });
   $("campos").innerHTML = html;
@@ -445,7 +451,7 @@ $("form").addEventListener("submit", async e => {
   const o = {};
   for (const [c, , tipo] of CAMPOS) {
     let val = $("f_" + c).value.trim();
-    if (tipo === "number") val = val.replace(/\D/g, "");
+    if (tipo === "number" && !DECIMAIS.includes(c)) val = val.replace(/\D/g, "");
     if (MAIUSC.includes(c)) val = val.toLocaleUpperCase("pt-BR");
     o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
@@ -690,16 +696,32 @@ async function aoAlterar(e) {
 $("lista").addEventListener("change", aoAlterar);
 $("kmLista").addEventListener("change", aoAlterar);
 // ---------- Dados técnicos ----------
-const TECNICOS = CAMPOS.filter(([c]) => [
-  "cartao_abastecimento", "renavam", "chassi", "numeracao_pneu",
-  "numero_motor", "patrimonio", "combustivel"
-].includes(c));
+const TECNICOS = [
+  ["cartao_abastecimento","Cartão de abastecimento","text"],
+  ["renavam","Renavam","text"],
+  ["chassi","Chassi","text"],
+  ["numeracao_pneu","Numeração do pneu","text"],
+  ["numero_motor","Número do motor","text"],
+  ["patrimonio","Patrimônio","text"],
+  ["tipo_aquisicao","Tipo de aquisição","text"],
+  ["orgao_repassador","Órgão repassador","text"],
+  ["nome_convenio","Nº Convênio","text"],
+  ["data_aquisicao","Data de aquisição","date"],
+  ["valor_aquisicao","Valor de aquisição (R$)","number"],
+  ["combustivel","Combustível","text"]
+];
 let dadosId = null;
 
 function abrirDados(v) {
   dadosId = v.id;
   $("dadosTitulo").textContent = `Dados técnicos — ${v.prefixo} / ${v.placa}`;
-  TECNICOS.forEach(([c]) => { const el = $("d_" + c); el.value = v[c] ?? ""; el.disabled = !admin; });
+  TECNICOS.forEach(([c]) => {
+    const el = $("d_" + c);
+    el.value = DECIMAIS.includes(c) && v[c] != null
+      ? Number(v[c]).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : v[c] ?? "";
+    el.disabled = !admin;
+  });
   $("dadosSalvar").hidden = !admin;
   listarDocs();
   $("dlgDados").showModal();
@@ -708,11 +730,19 @@ function abrirDados(v) {
 $("formDados").addEventListener("submit", async e => {
   e.preventDefault(); if (!admin) return;
   const o = {};
-  TECNICOS.forEach(([c]) => {
+  for (const [c, , tipo] of TECNICOS) {
     let val = $("d_" + c).value.trim();
+    if (DECIMAIS.includes(c)) {
+      if (val === "") { o[c] = null; continue; }
+      val = val.replace(/R\$/i, "").replace(/\s/g, "");
+      const numero = Number(val.includes(",") ? val.replace(/\./g, "").replace(",", ".") : val);
+      if (!Number.isFinite(numero) || numero < 0) return aviso("Informe um valor de aquisição válido.", true);
+      o[c] = numero;
+      continue;
+    }
     if (c === "chassi") val = val.toLocaleUpperCase("pt-BR");
-    o[c] = val || null;
-  });
+    o[c] = val === "" ? null : tipo === "number" ? Number(val) : val;
+  }
   const { data, error } = await sb.from("frota").update(o).eq("id", dadosId).select().single();
   if (error) return aviso(msgErro(error), true);
   frota[frota.findIndex(v => v.id === data.id)] = data;
@@ -772,7 +802,9 @@ $("cGerar").onclick = gerarCustos;
 async function imprimirFicha() {
   const v = frota.find(x => x.id === dadosId); if (!v) return;
   const { data } = await sb.from("manutencoes").select("*").eq("viatura_id", v.id).order("data", { ascending: false });
-  const val = (c, t) => t === "date" ? fmtData(v[c]) : (v[c] ?? "-");
+  const val = (c, t) => t === "date" ? fmtData(v[c])
+    : DECIMAIS.includes(c) && v[c] != null ? Number(v[c]).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : (v[c] ?? "-");
   $("ficha").innerHTML = `<h1 style="margin:0">Ficha da viatura ${esc(v.prefixo)} / ${esc(v.placa)}</h1><p>Emitida em ${new Date().toLocaleDateString("pt-BR")}</p>
     <table class="fx">${CAMPOS.map(([c, rot, t]) => `<tr><th>${rot}</th><td>${esc(val(c, t))}</td></tr>`).join("")}</table>
     <h2>Histórico de manutenção</h2><table class="fx"><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th></tr>
@@ -1052,7 +1084,12 @@ document.querySelectorAll("th.ord").forEach(t => {
   t.tabIndex = 0; t.setAttribute("role", "button");
   t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.click(); } });
 });
-$("camposDados").innerHTML = TECNICOS.map(([c, rot]) => `<div><label for="d_${c}">${rot}</label><input id="d_${c}"${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`).join("");
+$("camposDados").innerHTML = TECNICOS.map(([c, rot, tipo]) => {
+  const inputType = tipo === "date" ? "date" : DECIMAIS.includes(c) ? "text" : tipo === "number" ? "number" : "text";
+  const atributos = DECIMAIS.includes(c) ? 'inputmode="decimal"'
+    : tipo === "number" ? 'min="0" step="1" inputmode="numeric"' : "";
+  return `<div><label for="d_${c}">${rot}</label><input id="d_${c}" type="${inputType}" ${atributos}${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`;
+}).join("");
 sb.auth.getSession().then(({ data }) => { if (data.session && !recuperando) return entrar(); })
   .catch(e => { const er = $("erroLogin"); er.textContent = e.message || "Não foi possível restaurar a sessão."; er.hidden = false; });
 </script>
