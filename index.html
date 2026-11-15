@@ -216,7 +216,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
     <input type="password" id="novaSenha" minlength="8" autocomplete="new-password" required>
     <label for="novaSenha2">Repita a senha</label>
     <input type="password" id="novaSenha2" minlength="8" autocomplete="new-password" required>
-    <div class="rodape"><button type="submit" class="ok">Salvar senha</button></div>
+    <div class="rodape"><button type="submit" class="ok">Salvar senha</button><button type="button" class="sec" id="cancelaSenha">Cancelar</button></div>
   </form>
 </dialog>
 <datalist id="listaEmpregos"></datalist>
@@ -975,7 +975,9 @@ $("login").addEventListener("submit", async e => {
   }
 });
 
-const recuperando = location.hash.includes("type=recovery");
+// recuperação de senha: a janela só some quando a senha é salva ou a pessoa cancela (aí é desconectada)
+const recuperando = location.hash.includes("type=recovery") || sessionStorage.getItem("recuperandoSenha") === "1";
+if (recuperando) { try { sessionStorage.setItem("recuperandoSenha", "1"); } catch {} }
 $("esqueci").addEventListener("click", async e => {
   e.preventDefault();
   const email = $("email").value.trim() || prompt("Digite o seu e-mail:");
@@ -989,9 +991,16 @@ $("formSenha").addEventListener("submit", async e => {
   if ($("novaSenha").value !== $("novaSenha2").value) return aviso("As senhas não conferem.", true);
   const { error } = await sb.auth.updateUser({ password: $("novaSenha").value });
   if (error) return aviso(msgErro(error), true);
+  try { sessionStorage.removeItem("recuperandoSenha"); } catch {}
   aviso("Senha alterada. Entrando...");
   setTimeout(() => location.replace(location.pathname), 900);
 });
+$("dlgSenha").addEventListener("cancel", e => e.preventDefault()); // Esc não fecha a janela
+$("cancelaSenha").onclick = async () => {
+  try { sessionStorage.removeItem("recuperandoSenha"); } catch {}
+  await sb.auth.signOut();
+  location.replace(location.pathname);
+};
 if (recuperando) $("dlgSenha").showModal();
 
 $("btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
