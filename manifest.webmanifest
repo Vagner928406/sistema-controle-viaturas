@@ -1,0 +1,9 @@
+{
+  "name": "Controle de Manutenção de Viaturas",
+  "short_name": "Viaturas",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef1f5",
+  "theme_color": "#0b2f4f",
+  "icons": [{ "src": "logo-viaturas-fundo-transparente.png", "sizes": "any", "type": "image/png", "purpose": "any" }]
+}
