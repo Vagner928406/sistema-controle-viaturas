@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Controle de Manutenção de Viaturas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b2f4f">
 <style>
 :root{--azul:#0b2f4f;--azul2:#14507f;--fundo:#eef1f5;--borda:#d5dbe3;--txt:#1d2733;--verm:#c62f3b;--amar:#f2b53a;--verde:#1f8a4c}
 *{box-sizing:border-box}
@@ -85,6 +87,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <input type="password" id="senha" autocomplete="current-password" required>
   <button type="submit" id="btnEntrar" style="width:100%;margin-top:14px">Entrar</button>
   <p id="erroLogin" role="alert" hidden></p>
+  <p style="margin:12px 0 0;text-align:center"><a href="#" id="esqueci">Esqueci minha senha</a></p>
 </form>
 
 <div id="app" hidden>
@@ -93,6 +96,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <h1>Controle de Manutenção de Viaturas <small id="perfilTxt"></small></h1>
   <button class="sec" id="btnKm" hidden>Atualizar KM</button>
   <button class="sec" id="btnAtualizar" title="Recarregar os dados">Atualizar</button>
+  <button class="sec" id="btnPend">Pendências</button>
   <button class="sec" id="btnCustos">Custos</button>
   <button class="sec so-admin" id="btnLog" hidden>Alterações</button>
   <button class="sec so-admin" id="btnUsr" hidden>Usuários</button>
@@ -205,6 +209,16 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <input type="search" id="kmBusca" placeholder="Buscar prefixo, placa ou modelo" aria-label="Buscar viatura" style="margin-top:10px">
   <div id="kmLista" style="max-height:65vh;overflow:auto;margin-top:8px"></div>
 </dialog>
+<dialog id="dlgSenha">
+  <h2>Definir nova senha</h2>
+  <form id="formSenha">
+    <label for="novaSenha">Nova senha (mínimo 8 caracteres)</label>
+    <input type="password" id="novaSenha" minlength="8" autocomplete="new-password" required>
+    <label for="novaSenha2">Repita a senha</label>
+    <input type="password" id="novaSenha2" minlength="8" autocomplete="new-password" required>
+    <div class="rodape"><button type="submit" class="ok">Salvar senha</button></div>
+  </form>
+</dialog>
 <datalist id="listaEmpregos"></datalist>
 <div id="ficha"></div>
 <footer class="assinatura">© 2026 · Desenvolvido por Vagner José de Souza</footer>
@@ -226,6 +240,7 @@ const CAMPOS = [
   ["prefixo","Prefixo","text","Identificação"],["placa","Placa","text"],["marca","Marca","text"],["modelo","Modelo","text"],
   ["ano","Ano (AAAA ou AAAA/AAAA)","text"],["emprego","Emprego","text"],["km","KM atual","number"],
   ["status","Status","select"],["observacao","Observação","text"],
+  ["emprestada_para","Emprestada para (quem/onde)","text","Empréstimo"],["emprestada_desde","Emprestada desde","date"],["devolucao_prevista","Devolução prevista","date"],
   ["ultima_revisao","Última revisão/manutenção","date","Manutenção"],["troca_oleo","Data da próxima troca de óleo","date"],
   ["km_troca_oleo","KM da próxima troca de óleo","number"],["km_filtro_oleo","KM da próxima troca do filtro de óleo","number"],
   ["km_filtro_combustivel","KM da próxima troca do filtro de combustível","number"],["km_filtro_ar","KM da próxima troca do filtro de ar","number"],
@@ -284,6 +299,11 @@ function alertas(v) {
     const d = Math.round((new Date(v.troca_oleo + "T00:00:00") - hoje) / 864e5);
     if (d < 0) a.push(["v", `Óleo vencido há ${-d} dia(s)`]);
     else if (d <= LIMITE_DIAS) a.push(["p", d === 0 ? "Óleo vence hoje" : `Óleo em ${d} dia(s)`]);
+  }
+  if (v.status === "Emprestada" && v.devolucao_prevista) {
+    const d = dias(v.devolucao_prevista);
+    if (d < 0) a.push(["v", `Devolução atrasada há ${-d} dia(s)`]);
+    else if (d <= 3) a.push(["p", d === 0 ? "Devolução prevista para hoje" : `Devolução em ${d} dia(s)`]);
   }
   const rp = reparos.filter(r => r.viatura_id === v.id);
   if (rp.length) {
@@ -351,7 +371,7 @@ function render() {
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
       <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}<br>${idadeKm(v)}</td>
-      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}</td>
+      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}${v.status === "Emprestada" && v.emprestada_para ? `<br><small>→ ${esc(v.emprestada_para)}</small>` : ""}</td>
       <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
       <td>${al.map(([t, m]) => `<span class="chip ${t}">${esc(m)}</span>`).join("") || "<small>Em dia</small>"}</td>
@@ -533,6 +553,16 @@ $("formHist").addEventListener("submit", async e => {
   e.preventDefault();
   const reg = { viatura_id: histId, data: $("hData").value, km: Number($("hKm").value.replace(/\D/g, "")), descricao: $("hDesc").value.trim(),
     oficina: $("hOficina").value.trim() || null, valor: $("hValor").value === "" ? null : Number($("hValor").value) };
+  if (!histEdit) {
+    const prox = calcProximas();
+    const { data, error } = await sb.rpc("registrar_manutencao", { p_viatura: histId, p_data: reg.data, p_km: reg.km, p_desc: reg.descricao,
+      p_oficina: reg.oficina, p_valor: reg.valor, p_prox: prox });
+    if (error) return aviso(msgErro(error), true);
+    const row = Array.isArray(data) ? data[0] : data, i = frota.findIndex(x => x.id === histId);
+    if (row && i >= 0) { frota[i] = row; render(); }
+    sairEdicaoHist(); await listarHist();
+    return aviso(Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
+  }
   const { error } = histEdit
     ? await sb.from("manutencoes").update({ data: reg.data, km: reg.km, descricao: reg.descricao, oficina: reg.oficina, valor: reg.valor }).eq("id", histEdit)
     : await sb.from("manutencoes").insert(reg);
@@ -685,9 +715,12 @@ async function gerarCustos() {
     return `<tr><td>${esc(v ? v.prefixo + " / " + v.placa : "Viatura " + id)}</td><td>${x.n}</td><td>${brl(x.t)}</td></tr>`;
   }).join("");
   const lm = Object.entries(porM).sort().map(([m, t]) => `<tr><td>${m.split("-").reverse().join("/")}</td><td>${brl(t)}</td></tr>`).join("");
+  const barras = (ent, rot) => { const mx = Math.max(...ent.map(e => e[1]), 1); return ent.map(([k, t]) =>
+    `<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="width:90px;font-size:12px">${esc(rot(k))}</span><div style="flex:1;background:#e4e8ee;border-radius:4px"><div style="width:${Math.max(t / mx * 100, 1)}%;background:var(--azul2);height:14px;border-radius:4px"></div></div><b style="width:96px;text-align:right;font-size:12px">${brl(t)}</b></div>`).join(""); };
+  const topV = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).slice(0, 8).map(([id, x]) => [id, x.t]);
   $("custosRes").innerHTML = `<p style="font-weight:700">${data.length} serviço(s) · total ${brl(total)}</p>
     <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
-    <h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
+    <h3>Custo por mês</h3>${barras(Object.entries(porM).sort(), k => k.split("-").reverse().join("/"))}<h3>Viaturas com maior custo</h3>${barras(topV, id => { const v = frota.find(f => f.id === Number(id)); return v ? v.prefixo : "Viatura " + id; })}<h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
 }
 $("btnCustos").onclick = abrirCustos;
 $("cGerar").onclick = gerarCustos;
@@ -704,6 +737,17 @@ async function imprimirFicha() {
   window.print();
 }
 $("btnFicha").onclick = imprimirFicha;
+
+// ---------- Pendências para imprimir ----------
+$("btnPend").onclick = () => {
+  const lin = frota.map(v => ({ v, al: alertas(v) })).filter(x => x.al.length)
+    .sort((a, b) => a.v.prefixo.localeCompare(b.v.prefixo, "pt-BR", { numeric: true }));
+  $("ficha").innerHTML = `<h1 style="margin:0">Pendências da frota</h1><p>Emitido em ${new Date().toLocaleDateString("pt-BR")} · ${lin.length} viatura(s) com pendência</p>`
+    + (lin.length ? `<table class="fx"><tr><th>Viatura</th><th>Veículo</th><th>KM atual</th><th>Pendências</th></tr>${lin.map(({ v, al }) =>
+      `<tr><td>${esc(v.prefixo)}<br>${esc(v.placa)}</td><td>${esc(v.marca)} ${esc(v.modelo)}</td><td>${fmtKm(v.km)}</td><td>${al.map(([t, m]) => (t === "v" ? "● " : "○ ") + esc(m)).join("<br>")}</td></tr>`).join("")}</table>
+      <p>● vencido ou urgente &nbsp;&nbsp; ○ próximo do vencimento</p>` : "<p>Nenhuma pendência.</p>");
+  window.print();
+};
 
 // ---------- Backup ----------
 async function todos(t) {
@@ -910,7 +954,7 @@ async function entrar() {
 $("login").addEventListener("submit", async e => {
   e.preventDefault();
   const btn = $("btnEntrar"), erro = $("erroLogin");
-  erro.hidden = true; btn.disabled = true; btn.textContent = "Entrando...";
+  erro.hidden = true; erro.style.color = ""; btn.disabled = true; btn.textContent = "Entrando...";
   const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("senha").value });
   btn.disabled = false; btn.textContent = "Entrar";
   try {
@@ -925,6 +969,25 @@ $("login").addEventListener("submit", async e => {
   }
 });
 
+const recuperando = location.hash.includes("type=recovery");
+$("esqueci").addEventListener("click", async e => {
+  e.preventDefault();
+  const email = $("email").value.trim() || prompt("Digite o seu e-mail:");
+  if (!email) return;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  const er = $("erroLogin"); er.hidden = false; er.style.color = error ? "" : "var(--verde)";
+  er.textContent = error ? "Não foi possível enviar: " + error.message : "Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha.";
+});
+$("formSenha").addEventListener("submit", async e => {
+  e.preventDefault();
+  if ($("novaSenha").value !== $("novaSenha2").value) return aviso("As senhas não conferem.", true);
+  const { error } = await sb.auth.updateUser({ password: $("novaSenha").value });
+  if (error) return aviso(msgErro(error), true);
+  aviso("Senha alterada. Entrando...");
+  setTimeout(() => location.replace(location.pathname), 900);
+});
+if (recuperando) $("dlgSenha").showModal();
+
 $("btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 
 montarCampos();
@@ -934,7 +997,7 @@ document.querySelectorAll("th.ord").forEach(t => {
   t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.click(); } });
 });
 $("camposDados").innerHTML = TECNICOS.map(([c, rot]) => `<div><label for="d_${c}">${rot}</label><input id="d_${c}"${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`).join("");
-sb.auth.getSession().then(({ data }) => { if (data.session) return entrar(); })
+sb.auth.getSession().then(({ data }) => { if (data.session && !recuperando) return entrar(); })
   .catch(e => { const er = $("erroLogin"); er.textContent = e.message || "Não foi possível restaurar a sessão."; er.hidden = false; });
 </script>
 </body>
