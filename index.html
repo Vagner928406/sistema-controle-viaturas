@@ -71,6 +71,10 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 .hist table{min-width:520px}.hist th{padding:7px}.hist td{padding:6px 8px}
 #aviso{position:fixed;inset:auto auto 16px 50%;transform:translateX(-50%);margin:0;border:0;max-width:calc(100% - 24px);background:var(--azul);color:#fff;padding:10px 18px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 #aviso.erro{background:var(--verm);inset:16px auto auto 50%;font-weight:600}
+#carregando{position:fixed;z-index:1000;top:14px;right:14px;display:flex;align-items:center;gap:9px;max-width:calc(100% - 28px);padding:10px 14px;border:1px solid var(--borda);border-radius:8px;background:#fff;color:var(--txt);box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.spinner{width:18px;height:18px;flex:none;border:3px solid #d5dbe3;border-top-color:var(--azul2);border-radius:50%;animation:girar .8s linear infinite}
+@keyframes girar{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spinner{animation:none;border-top-color:var(--verde)}}
 .assinatura{text-align:center;padding:16px 12px 20px;color:#5b6877;font-size:13px}
 @media(max-width:600px){main{padding:12px}header h1{font-size:16px}}
 </style>
@@ -222,6 +226,9 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 <datalist id="listaEmpregos"></datalist>
 <div id="ficha"></div>
 <footer class="assinatura">© 2026 · Desenvolvido por Vagner José de Souza</footer>
+<div id="carregando" role="status" aria-live="polite" aria-atomic="true" hidden>
+  <span class="spinner" aria-hidden="true"></span><span id="carregandoTxt"></span>
+</div>
 <div id="aviso" popover="manual" role="status"></div>
 
 <script>
@@ -234,6 +241,25 @@ if (typeof supabase === "undefined") {
 const sb = supabase.createClient("https://jxtivpcduhomnnqpukaj.supabase.co", "sb_publishable_lJTNW-tGjLGPEZdkqY3q6w_R2OqNerz");
 const $ = id => document.getElementById(id);
 const LIMITE_KM = 500, LIMITE_DIAS = 30;
+let tarefasCarregando = [], proximaTarefaCarregando = 0;
+
+function mostrarCarregamento(mensagem) {
+  const tarefa = { id: ++proximaTarefaCarregando, mensagem };
+  tarefasCarregando.push(tarefa);
+  const atualizar = () => {
+    const atual = tarefasCarregando[tarefasCarregando.length - 1];
+    $("carregando").hidden = !atual;
+    $("carregandoTxt").textContent = atual ? atual.mensagem : "";
+  };
+  atualizar();
+  let finalizado = false;
+  return () => {
+    if (finalizado) return;
+    finalizado = true;
+    tarefasCarregando = tarefasCarregando.filter(x => x.id !== tarefa.id);
+    atualizar();
+  };
+}
 
 // [campo, rótulo, tipo, grupo]
 const CAMPOS = [
@@ -341,12 +367,15 @@ function idadeKm(v) {
   return `<small${d > 30 ? ' style="color:var(--verm);font-weight:700"' : ""}>KM atualizado ${d <= 0 ? "hoje" : "há " + d + " dia(s)"}</small>`;
 }
 async function carregar() {
-  const { data, error } = await sb.from("frota").select("*").order("prefixo");
-  if (error) { aviso(msgErro(error), true); return; }
-  frota = data; ultimaCarga = Date.now();
-  const r = await sb.from("reparos").select("*").eq("concluido", false).order("criado_em");
-  if (r.error) aviso(msgErro(r.error), true); else reparos = r.data;
-  render();
+  const finalizar = mostrarCarregamento("Carregando dados da frota...");
+  try {
+    const { data, error } = await sb.from("frota").select("*").order("prefixo");
+    if (error) { aviso(msgErro(error), true); return; }
+    frota = data; ultimaCarga = Date.now();
+    const r = await sb.from("reparos").select("*").eq("concluido", false).order("criado_em");
+    if (r.error) aviso(msgErro(r.error), true); else reparos = r.data;
+    render();
+  } finally { finalizar(); }
 }
 
 function filtradas() {
@@ -545,16 +574,19 @@ function marcarPorDescricao() {
 }
 
 async function listarHist() {
-  const { data, error } = await sb.from("manutencoes").select("*").eq("viatura_id", histId).order("data", { ascending: false });
-  if (error) { $("histLista").innerHTML = ""; return aviso(msgErro(error), true); }
-  histRows = data;
-  const total = data.reduce((s, r) => s + (Number(r.valor) || 0), 0);
-  $("histTotal").textContent = data.length ? `${data.length} registro(s) · custo total ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : "";
-  $("histLista").innerHTML = data.length ? `<table><thead><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th>${admin ? "<th></th>" : ""}</tr></thead><tbody>${data.map(r =>
-    `<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina) || "-"}</td>
-     <td>${r.valor != null ? Number(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}</td>
-     ${admin ? `<td class="acoes"><button class="sec" data-edit="${r.id}">Editar</button> <button class="perigo" data-del="${r.id}">Excluir</button></td>` : ""}</tr>`).join("")}</tbody></table>`
-    : "<p>Nenhuma manutenção registrada.</p>";
+  const finalizar = mostrarCarregamento("Carregando histórico...");
+  try {
+    const { data, error } = await sb.from("manutencoes").select("*").eq("viatura_id", histId).order("data", { ascending: false });
+    if (error) { $("histLista").innerHTML = ""; return aviso(msgErro(error), true); }
+    histRows = data;
+    const total = data.reduce((s, r) => s + (Number(r.valor) || 0), 0);
+    $("histTotal").textContent = data.length ? `${data.length} registro(s) · custo total ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : "";
+    $("histLista").innerHTML = data.length ? `<table><thead><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th>${admin ? "<th></th>" : ""}</tr></thead><tbody>${data.map(r =>
+      `<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina) || "-"}</td>
+       <td>${r.valor != null ? Number(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}</td>
+       ${admin ? `<td class="acoes"><button class="sec" data-edit="${r.id}">Editar</button> <button class="perigo" data-del="${r.id}">Excluir</button></td>` : ""}</tr>`).join("")}</tbody></table>`
+      : "<p>Nenhuma manutenção registrada.</p>";
+  } finally { finalizar(); }
 }
 
 $("formHist").addEventListener("submit", async e => {
@@ -658,7 +690,10 @@ async function aoAlterar(e) {
 $("lista").addEventListener("change", aoAlterar);
 $("kmLista").addEventListener("change", aoAlterar);
 // ---------- Dados técnicos ----------
-const TECNICOS = CAMPOS.slice(-7);
+const TECNICOS = CAMPOS.filter(([c]) => [
+  "cartao_abastecimento", "renavam", "chassi", "numeracao_pneu",
+  "numero_motor", "patrimonio", "combustivel"
+].includes(c));
 let dadosId = null;
 
 function abrirDados(v) {
@@ -698,34 +733,37 @@ async function abrirCustos() {
   $("dlgCustos").showModal(); await gerarCustos();
 }
 async function gerarCustos() {
-  let data = [], de = 0;
-  for (;;) {
-    let q = sb.from("manutencoes").select("viatura_id,data,valor").order("id").range(de, de + 999);
-    if ($("cDe").value) q = q.gte("data", $("cDe").value);
-    if ($("cAte").value) q = q.lte("data", $("cAte").value);
-    const r = await q;
-    if (r.error) return aviso(msgErro(r.error), true);
-    data = data.concat(r.data);
-    if (r.data.length < 1000) break;
-    de += 1000;
-  }
-  const porV = {}, porM = {}; let total = 0;
-  data.forEach(r => {
-    const val = Number(r.valor) || 0; total += val;
-    const o = porV[r.viatura_id] ||= { n: 0, t: 0 }; o.n++; o.t += val;
-    const m = r.data.slice(0, 7); porM[m] = (porM[m] || 0) + val;
-  });
-  const lv = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).map(([id, x]) => {
-    const v = frota.find(f => f.id === Number(id));
-    return `<tr><td>${esc(v ? v.prefixo + " / " + v.placa : "Viatura " + id)}</td><td>${x.n}</td><td>${brl(x.t)}</td></tr>`;
-  }).join("");
-  const lm = Object.entries(porM).sort().map(([m, t]) => `<tr><td>${m.split("-").reverse().join("/")}</td><td>${brl(t)}</td></tr>`).join("");
-  const barras = (ent, rot) => { const mx = Math.max(...ent.map(e => e[1]), 1); return ent.map(([k, t]) =>
-    `<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="width:90px;font-size:12px">${esc(rot(k))}</span><div style="flex:1;background:#e4e8ee;border-radius:4px"><div style="width:${Math.max(t / mx * 100, 1)}%;background:var(--azul2);height:14px;border-radius:4px"></div></div><b style="width:96px;text-align:right;font-size:12px">${brl(t)}</b></div>`).join(""); };
-  const topV = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).slice(0, 8).map(([id, x]) => [id, x.t]);
-  $("custosRes").innerHTML = `<p style="font-weight:700">${data.length} serviço(s) · total ${brl(total)}</p>
-    <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
-    <h3>Custo por mês</h3>${barras(Object.entries(porM).sort(), k => k.split("-").reverse().join("/"))}<h3>Viaturas com maior custo</h3>${barras(topV, id => { const v = frota.find(f => f.id === Number(id)); return v ? v.prefixo : "Viatura " + id; })}<h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
+  const finalizar = mostrarCarregamento("Calculando custos...");
+  try {
+    let data = [], de = 0;
+    for (;;) {
+      let q = sb.from("manutencoes").select("viatura_id,data,valor").order("id").range(de, de + 999);
+      if ($("cDe").value) q = q.gte("data", $("cDe").value);
+      if ($("cAte").value) q = q.lte("data", $("cAte").value);
+      const r = await q;
+      if (r.error) return aviso(msgErro(r.error), true);
+      data = data.concat(r.data);
+      if (r.data.length < 1000) break;
+      de += 1000;
+    }
+    const porV = {}, porM = {}; let total = 0;
+    data.forEach(r => {
+      const val = Number(r.valor) || 0; total += val;
+      const o = porV[r.viatura_id] ||= { n: 0, t: 0 }; o.n++; o.t += val;
+      const m = r.data.slice(0, 7); porM[m] = (porM[m] || 0) + val;
+    });
+    const lv = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).map(([id, x]) => {
+      const v = frota.find(f => f.id === Number(id));
+      return `<tr><td>${esc(v ? v.prefixo + " / " + v.placa : "Viatura " + id)}</td><td>${x.n}</td><td>${brl(x.t)}</td></tr>`;
+    }).join("");
+    const lm = Object.entries(porM).sort().map(([m, t]) => `<tr><td>${m.split("-").reverse().join("/")}</td><td>${brl(t)}</td></tr>`).join("");
+    const barras = (ent, rot) => { const mx = Math.max(...ent.map(e => e[1]), 1); return ent.map(([k, t]) =>
+      `<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="width:90px;font-size:12px">${esc(rot(k))}</span><div style="flex:1;background:#e4e8ee;border-radius:4px"><div style="width:${Math.max(t / mx * 100, 1)}%;background:var(--azul2);height:14px;border-radius:4px"></div></div><b style="width:96px;text-align:right;font-size:12px">${brl(t)}</b></div>`).join(""); };
+    const topV = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).slice(0, 8).map(([id, x]) => [id, x.t]);
+    $("custosRes").innerHTML = `<p style="font-weight:700">${data.length} serviço(s) · total ${brl(total)}</p>
+      <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
+      <h3>Custo por mês</h3>${barras(Object.entries(porM).sort(), k => k.split("-").reverse().join("/"))}<h3>Viaturas com maior custo</h3>${barras(topV, id => { const v = frota.find(f => f.id === Number(id)); return v ? v.prefixo : "Viatura " + id; })}<h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
+  } finally { finalizar(); }
 }
 $("btnCustos").onclick = abrirCustos;
 $("cGerar").onclick = gerarCustos;
@@ -766,19 +804,22 @@ async function todos(t) {
   }
 }
 $("btnBackup").onclick = async () => {
-  let fr, m, rp, pf = [];
-  const anexos = {};
+  const finalizar = mostrarCarregamento("Gerando backup...");
   try {
-    fr = await todos("frota"); m = await todos("manutencoes"); rp = await todos("reparos");
-    for (const v of fr) {
-      const { data } = await sb.storage.from(BUCKET).list(`viatura_${v.id}`, { limit: 1000 });
-      anexos[v.prefixo] = (data || []).map(f => f.name).filter(n => n !== ".emptyFolderPlaceholder");
-    }
-  } catch (e) { return aviso(msgErro(e), true); }
-  try { pf = await todos("usuarios_perfis"); } catch {}
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota: fr, manutencoes: m, reparos: rp, perfis: pf, anexos_nomes: anexos }, null, 1)], { type: "application/json" }));
-  a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
+    let fr, m, rp, pf = [];
+    const anexos = {};
+    try {
+      fr = await todos("frota"); m = await todos("manutencoes"); rp = await todos("reparos");
+      for (const v of fr) {
+        const { data } = await sb.storage.from(BUCKET).list(`viatura_${v.id}`, { limit: 1000 });
+        anexos[v.prefixo] = (data || []).map(f => f.name).filter(n => n !== ".emptyFolderPlaceholder");
+      }
+    } catch (e) { return aviso(msgErro(e), true); }
+    try { pf = await todos("usuarios_perfis"); } catch {}
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota: fr, manutencoes: m, reparos: rp, perfis: pf, anexos_nomes: anexos }, null, 1)], { type: "application/json" }));
+    a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
+  } finally { finalizar(); }
 };
 
 // ---------- Documentos e fotos ----------
