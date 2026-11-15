@@ -262,11 +262,18 @@ const fmtKm = v => v == null ? "-" : Number(v).toLocaleString("pt-BR");
 const fmtData = d => d ? d.split("-").reverse().join("/") : "-";
 const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+if (!$("aviso").showPopover) $("aviso").hidden = true; // navegador sem popover: a caixa começa escondida
 function aviso(msg, erro) {
   const a = $("aviso"); a.textContent = msg; a.className = erro ? "erro" : "";
+  clearTimeout(aviso.t);
+  if (!a.showPopover) { // navegadores sem popover (ex.: iOS 16): caixa comum
+    a.hidden = false;
+    aviso.t = setTimeout(() => { a.hidden = true; }, erro ? 7000 : 2500);
+    return;
+  }
   if (a.matches(":popover-open")) a.hidePopover();
   a.showPopover();
-  clearTimeout(aviso.t); aviso.t = setTimeout(() => a.matches(":popover-open") && a.hidePopover(), erro ? 7000 : 2500);
+  aviso.t = setTimeout(() => a.matches(":popover-open") && a.hidePopover(), erro ? 7000 : 2500);
 }
 function msgErro(e) {
   const m = e?.message || String(e);
@@ -413,6 +420,7 @@ $("form").addEventListener("submit", async e => {
     if (MAIUSC.includes(c)) val = val.toLocaleUpperCase("pt-BR");
     o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
+  if (o.status !== "Emprestada") { o.emprestada_para = null; o.emprestada_desde = null; o.devolucao_prevista = null; }
   const anos = String(o.ano).split("/");
   if (!/^\d{4}(\/\d{4})?$/.test(o.ano) || anos.some(a => a < 1950 || a > 2100)) return aviso("Informe o ano como AAAA ou AAAA/AAAA.", true);
   let alvo = o;
@@ -563,16 +571,12 @@ $("formHist").addEventListener("submit", async e => {
     sairEdicaoHist(); await listarHist();
     return aviso(Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
   }
-  const { error } = histEdit
-    ? await sb.from("manutencoes").update({ data: reg.data, km: reg.km, descricao: reg.descricao, oficina: reg.oficina, valor: reg.valor }).eq("id", histEdit)
-    : await sb.from("manutencoes").insert(reg);
+  // a partir daqui só edição: o registro novo é feito pela função registrar_manutencao
+  const { error } = await sb.from("manutencoes").update({ data: reg.data, km: reg.km, descricao: reg.descricao, oficina: reg.oficina, valor: reg.valor }).eq("id", histEdit);
   if (error) return aviso(msgErro(error), true);
   // atualiza a viatura: última revisão e KM (apenas se o registro for mais recente/maior)
   const v = frota.find(x => x.id === histId), up = {};
-  const maisRecente = !v.ultima_revisao || reg.data >= v.ultima_revisao;
-  const prox = !histEdit && maisRecente ? calcProximas() : {};
   if (!v.ultima_revisao || reg.data > v.ultima_revisao) up.ultima_revisao = reg.data;
-  Object.assign(up, prox);
   if (reg.km > (v.km ?? 0)) up.km = reg.km;
   let falha = "";
   if (Object.keys(up).length) {
@@ -580,11 +584,10 @@ $("formHist").addEventListener("submit", async e => {
     if (r2.error) falha = msgErro(r2.error);
     else { frota[frota.findIndex(x => x.id === histId)] = r2.data; render(); }
   }
-  const editou = !!histEdit;
   sairEdicaoHist();
   await listarHist();
   if (falha) return aviso("Manutenção salva, mas a viatura não foi atualizada: " + falha, true);
-  aviso(editou ? "Manutenção atualizada." : Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
+  aviso("Manutenção atualizada.");
 });
 
 $("histLista").addEventListener("click", async e => {
@@ -646,7 +649,9 @@ async function aoAlterar(e) {
     frota[frota.findIndex(v => v.id === data.id)] = data; aviso("Observação salva."); return;
   }
   const el = e.target.closest(".stsel"); if (!el) return;
-  const { data, error } = await sb.from("frota").update({ status: el.value }).eq("id", Number(el.dataset.id)).select().single();
+  const up = { status: el.value };
+  if (el.value !== "Emprestada") Object.assign(up, { emprestada_para: null, emprestada_desde: null, devolucao_prevista: null });
+  const { data, error } = await sb.from("frota").update(up).eq("id", Number(el.dataset.id)).select().single();
   if (error) { aviso(msgErro(error), true); return render(); }
   frota[frota.findIndex(v => v.id === data.id)] = data; render(); aviso("Status atualizado.");
 }
@@ -940,7 +945,8 @@ document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.clos
 async function entrar() {
   const { data: { user } } = await sb.auth.getUser();
   if (!user) throw new Error("Sessão expirada. Entre novamente.");
-  const { data } = await sb.from("usuarios_perfis").select("perfil").eq("id", user.id).maybeSingle();
+  const { data, error: errPerfil } = await sb.from("usuarios_perfis").select("perfil").eq("id", user.id).maybeSingle();
+  if (errPerfil) throw new Error("Falha de conexão ao verificar seu perfil. Tente de novo.");
   if (!data?.perfil) { await sb.auth.signOut(); throw new Error("Seu usuário ainda não foi liberado por um administrador."); }
   admin = data?.perfil === "admin";
   podeKm = admin || data?.perfil === "operador";
