@@ -17,6 +17,7 @@ button:hover{filter:brightness(1.12)}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #7db3e6;outline-offset:1px}
 .sec{background:#e4e8ee;color:var(--txt)}.perigo{background:var(--verm)}.ok{background:var(--verde)}
 input,select{width:100%;padding:9px;border:1px solid var(--borda);border-radius:6px;background:#fff}
+#f_resp_emprestimo,.empRegistro textarea{width:100%;padding:9px;border:1px solid var(--borda);border-radius:6px;background:#fff;font:inherit;resize:vertical}
 input:disabled,select:disabled{background:#f1f3f6;color:#333}
 label{display:block;font-size:12px;font-weight:600;margin:8px 0 2px}
 #login{max-width:380px;margin:12vh auto;background:#fff;padding:26px;border-radius:10px;border:1px solid var(--borda)}
@@ -55,7 +56,7 @@ th.ord{cursor:pointer;user-select:none}th.ord::after{content:attr(data-seta)}
 .fx th,.fx td{border:1px solid #999;padding:5px 8px;text-align:left;color:#000;background:#fff}
 @media print{body>*:not(#ficha){display:none!important}#ficha{display:block}dialog{display:none!important}}
 .stsel{width:auto;padding:5px 6px;font-weight:700;color:inherit;cursor:pointer}
-.st{font-weight:700}.st-Disponível{color:var(--verde)}.st-Manutenção{color:#b86a00}.st-Emprestada{color:#1a62b8}.st-Baixada{color:var(--verm)}
+.st{font-weight:700}.st-Disponível{color:var(--verde)}.st-Manutenção{color:#b86a00}.st-Emprestada{color:#1a62b8}.st-Curso\/Operação{color:#7b3fb8}.st-Baixada{color:var(--verm)}
 .chip{display:inline-block;margin:0 4px 4px 0;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600}
 .chip.v{background:var(--verm);color:#fff}.chip.p{background:var(--amar);color:#4a3500}
 td.acoes{white-space:nowrap}td.acoes button{padding:6px 10px;margin-right:4px}
@@ -115,7 +116,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <div class="barra">
     <input type="search" id="busca" placeholder="Pesquisar prefixo, placa, marca, modelo, emprego ou observação" aria-label="Pesquisar">
     <select id="fStatus" aria-label="Filtrar por status">
-      <option value="">Todos os status</option><option>Disponível</option><option>Manutenção</option><option>Emprestada</option><option>Baixada</option>
+      <option value="">Todos os status</option><option>Disponível</option><option>Manutenção</option><option>Emprestada</option><option>Curso/Operação</option><option>Baixada</option>
     </select>
     <select id="fEmprego" aria-label="Filtrar por emprego"><option value="">Todos os empregos</option></select>
     <label><input type="checkbox" id="fAlerta"> Só com alertas</label>
@@ -302,7 +303,10 @@ const CAMPOS = [
 ];
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
 const DECIMAIS = ["valor_aquisicao"];
-const STATUS = ["Disponível","Manutenção","Emprestada","Baixada"];
+const STATUS = ["Disponível","Manutenção","Emprestada","Curso/Operação","Baixada"];
+const emprestado = st => st === "Emprestada" || st === "Curso/Operação";
+const rotResp = st => st === "Curso/Operação" ? "Guarnição" : "Responsável";
+const linhasTxt = t => esc(t).replace(/\r?\n/g, "<br>");
 const limparEmprestimoAtivo = o => Object.assign(o, {
   resp_emprestimo: null,
   destino_emprestimo: null,
@@ -363,7 +367,7 @@ function alertas(v) {
     if (d < 0) a.push(["v", `Óleo vencido há ${-d} dia(s)`]);
     else if (d <= LIMITE_DIAS) a.push(["p", d === 0 ? "Óleo vence hoje" : `Óleo em ${d} dia(s)`]);
   }
-  if (v.status === "Emprestada" && v.devolucao_prevista) {
+  if (emprestado(v.status) && v.devolucao_prevista) {
     const d = dias(v.devolucao_prevista);
     if (d < 0) a.push(["v", `Devolução atrasada há ${-d} dia(s)`]);
     else if (d <= 3) a.push(["p", d === 0 ? "Devolução prevista para hoje" : `Devolução em ${d} dia(s)`]);
@@ -428,10 +432,10 @@ function render() {
   const n = s => frota.filter(v => v.status === s).length;
   const comAlerta = frota.filter(v => alertas(v).length).length;
   const emprestimosAtrasados = frota.filter(v =>
-    v.status === "Emprestada" && v.devolucao_prevista && dias(v.devolucao_prevista) < 0
+    emprestado(v.status) && v.devolucao_prevista && dias(v.devolucao_prevista) < 0
   ).length;
   $("resumo").innerHTML = [["Total", frota.length],["Disponíveis", n("Disponível")],["Em manutenção", n("Manutenção")],
-    ["Emprestadas", n("Emprestada")],["Baixadas", n("Baixada")]].map(([t, x]) => `<div><b>${x}</b>${t}</div>`).join("")
+    ["Emprestadas", n("Emprestada")],["Curso/Operação", n("Curso/Operação")],["Baixadas", n("Baixada")]].map(([t, x]) => `<div><b>${x}</b>${t}</div>`).join("")
     + `<div class="a"><b>${comAlerta}</b>Com alertas</div>`
     + `<div class="${emprestimosAtrasados ? "a" : ""}"><b>${emprestimosAtrasados}</b>Empréstimos atrasados</div>`;
   const lista = filtradas();
@@ -441,7 +445,7 @@ function render() {
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
       <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}<br>${idadeKm(v)}</td>
-      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}${v.status === "Emprestada" ? `<br><small>${esc(v.destino_emprestimo || "-")}<br>Resp.: ${esc(v.resp_emprestimo || "-")}</small>` : ""}</td>
+      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}${emprestado(v.status) ? `<br><small>${esc(v.destino_emprestimo || "-")}<br>${v.status === "Curso/Operação" ? "Guarnição" : "Resp."}: ${linhasTxt(v.resp_emprestimo || "-")}</small>` : ""}${v.status === "Disponível" && v.devolucao_real ? `<br><small>Retornou em ${fmtData(v.devolucao_real)}</small>` : ""}</td>
       <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
       <td>${al.map(([t, m]) => `<span class="chip ${t}">${esc(m)}</span>`).join("") || "<small>Em dia</small>"}</td>
@@ -456,16 +460,24 @@ function render() {
 function montarCampos() {
   let html = "";
   CAMPOS.forEach(([c, rot, tipo, grupo]) => {
-    if (grupo) html += `<h3>${grupo}</h3>`;
+    if (grupo) html += `<h3${c === "resp_emprestimo" ? ' id="tituloEmp"' : ""}>${grupo}</h3>`;
     const decimal = DECIMAIS.includes(c);
     const ctl = tipo === "select"
       ? `<select id="f_${c}" required>${STATUS.map(s => `<option>${s}</option>`).join("")}</select>`
+      : c === "resp_emprestimo"
+        ? `<textarea id="f_${c}" rows="2" maxlength="500" placeholder="Um policial por linha (só na Guarnição)"></textarea>`
       : decimal
         ? `<input id="f_${c}" type="number" min="0" step="0.01">`
       : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" && c !== "data_aquisicao" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""} ${c === "emprego" ? 'list="listaEmpregos"' : ""}>`;
     html += `<div><label for="f_${c}">${rot}</label>${ctl}</div>`;
   });
   $("campos").innerHTML = html;
+  $("f_status").addEventListener("change", ajustarRotulosEmp);
+}
+function ajustarRotulosEmp() {
+  const st = $("f_status").value, curso = st === "Curso/Operação";
+  $("tituloEmp").textContent = curso ? "Curso/Operação" : "Empréstimo";
+  document.querySelector('label[for="f_resp_emprestimo"]').textContent = curso ? "Guarnição (um policial por linha)" : "Responsável";
 }
 
 function abrirForm(v) {
@@ -473,6 +485,7 @@ function abrirForm(v) {
   $("formTitulo").textContent = v ? `${admin ? "Editar" : "Detalhes de"} ${v.prefixo} / ${v.placa}` : "Nova viatura";
   CAMPOS.forEach(([c]) => { const el = $("f_" + c); el.value = v?.[c] ?? (c === "status" ? "Disponível" : c === "km" ? 0 : ""); if (el.classList.contains("milhar") && el.value !== "") el.value = Number(el.value).toLocaleString("pt-BR"); el.disabled = !admin; });
   $("formRodape").children[0].hidden = !admin;
+  ajustarRotulosEmp();
   $("dlgForm").showModal();
 }
 
@@ -510,7 +523,8 @@ async function registrarNovoEmprestimo(v, contexto) {
     responsavel: v.resp_emprestimo,
     destino: v.destino_emprestimo,
     data_saida: v.emprestada_desde || hojeLocalISO(),
-    data_prevista: v.devolucao_prevista
+    data_prevista: v.devolucao_prevista,
+    ...(v.status === "Curso/Operação" ? { tipo: "Curso/Operação" } : {})
   });
   if (error) {
     console.error("ERRO EMPRÉSTIMO");
@@ -532,12 +546,14 @@ $("form").addEventListener("submit", async e => {
     o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
   const original = editando ? frota.find(v => v.id === editando) : null;
-  if (original?.status === "Emprestada" && o.status === "Disponível") o.devolucao_real = hojeLocalISO();
-  if (o.status === "Emprestada" && original?.status !== "Emprestada" && (!o.resp_emprestimo || !o.destino_emprestimo))
-    return aviso("Informe o responsável e o destino antes de registrar o empréstimo.", true);
-  const registrarEmprestimo = Boolean(o.status === "Emprestada" && o.resp_emprestimo && o.destino_emprestimo);
-  const registrarDevolucao = original?.status === "Emprestada" && o.status === "Disponível";
-  if (o.status !== "Emprestada") limparEmprestimoAtivo(o);
+  if (emprestado(original?.status) && o.status === "Disponível") o.devolucao_real = hojeLocalISO();
+  if (emprestado(o.status) && original?.status !== o.status && (!o.resp_emprestimo || !o.destino_emprestimo))
+    return aviso(`Informe ${o.status === "Curso/Operação" ? "a guarnição" : "o responsável"} e o destino antes de registrar.`, true);
+  const trocaTipo = emprestado(original?.status) && emprestado(o.status) && original.status !== o.status;
+  const registrarEmprestimo = Boolean(emprestado(o.status) && o.resp_emprestimo && o.destino_emprestimo);
+  const registrarDevolucao = emprestado(original?.status) && o.status === "Disponível";
+  if (!emprestado(o.status)) limparEmprestimoAtivo(o);
+  else if (!emprestado(original?.status)) o.devolucao_real = null;
   const anos = String(o.ano).split("/");
   if (!/^\d{4}(\/\d{4})?$/.test(o.ano) || anos.some(a => a < 1950 || a > 2100)) return aviso("Informe o ano como AAAA ou AAAA/AAAA.", true);
   let alvo = o;
@@ -557,6 +573,7 @@ $("form").addEventListener("submit", async e => {
   frota.sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
   $("dlgForm").close(); render();
   if (registrarEmprestimo) {
+    if (trocaTipo && !await registrarDevolucaoEmprestimo({ id: data.id, devolucao_real: hojeLocalISO() }, "Status salvo, mas não foi possível encerrar o registro anterior: ")) return;
     if (!await registrarNovoEmprestimo(data, "Erro empréstimo: ")) return;
   } else if (registrarDevolucao) {
     if (!await registrarDevolucaoEmprestimo(data, "Viatura devolvida, mas não foi possível atualizar o histórico de empréstimos: ")) return;
@@ -760,7 +777,7 @@ $("lista").addEventListener("click", e => {
 let emprestimoId = null;
 async function abrirEmprestimo(v) {
   emprestimoId = v.id;
-  $("empTitulo").textContent = `Histórico de Empréstimos — ${v.prefixo}`;
+  $("empTitulo").textContent = `Empréstimos e Curso/Operação — ${v.prefixo}`;
   $("empRes").innerHTML = "<p>Carregando histórico...</p>";
   $("empEditar").hidden = !admin;
   $("dlgEmp").showModal();
@@ -782,15 +799,15 @@ function renderEmp() {
   $("empRes").innerHTML = empRows.length ? empRows.map(emp => emp.id === empEditId
     ? `<div class="empRegistro"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
         <label>Destino<input data-f="destino" value="${esc(emp.destino || "")}" maxlength="120"></label>
-        <label>Responsável<input data-f="responsavel" value="${esc(emp.responsavel || "")}" maxlength="120"></label>
+        <label>${rotResp(emp.tipo)}${emp.tipo === "Curso/Operação" ? `<textarea data-f="responsavel" rows="3" maxlength="500" style="width:100%">${esc(emp.responsavel || "")}</textarea>` : `<input data-f="responsavel" value="${esc(emp.responsavel || "")}" maxlength="120">`}</label>
         <label>Saída<input type="date" data-f="data_saida" value="${esc(emp.data_saida || "")}"></label>
         <label>Prevista<input type="date" data-f="data_prevista" value="${esc(emp.data_prevista || "")}"></label>
         <label>Retorno<input type="date" data-f="data_retorno" value="${esc(emp.data_retorno || "")}"></label>
       </div>
       <div class="acoes" style="margin-top:8px"><button type="button" class="ok" data-emp-salvar="${emp.id}">Salvar</button> <button type="button" class="sec" data-emp-cancelar>Cancelar</button></div></div>`
     : `<div class="empRegistro">
-        <b>${esc(emp.destino) || "-"}</b><br>
-        Responsável: ${esc(emp.responsavel) || "-"}<br>
+        <b>${esc(emp.destino) || "-"}</b>${emp.tipo === "Curso/Operação" ? " <small>(Curso/Operação)</small>" : ""}<br>
+        ${emp.tipo === "Curso/Operação" ? "Guarnição" : "Responsável"}: ${linhasTxt(emp.responsavel) || "-"}<br>
         Saída: ${esc(fmtData(emp.data_saida))}<br>
         Prevista: ${esc(fmtData(emp.data_prevista))}<br>
         Retorno: ${esc(fmtData(emp.data_retorno))}
@@ -855,20 +872,21 @@ async function aoAlterar(e) {
   const up = { status: el.value };
   const original = frota.find(v => v.id === Number(el.dataset.id));
   if (!original) { aviso("Não foi possível localizar a viatura.", true); return render(); }
-  const statusEmprestada = el.value === "Emprestada";
-  if (statusEmprestada && (!original.resp_emprestimo || !original.destino_emprestimo)) {
+  const statusEmprestada = emprestado(el.value);
+  if (statusEmprestada && (!original.resp_emprestimo || !original.destino_emprestimo || original.status !== el.value && emprestado(original.status))) {
     render();
-    if (admin) { abrirForm(original); $("f_status").value = "Emprestada"; }
-    return aviso("Informe o responsável e o destino para registrar o empréstimo.", true);
+    if (admin) { abrirForm(original); $("f_status").value = el.value; ajustarRotulosEmp(); }
+    return aviso(`Informe ${el.value === "Curso/Operação" ? "a guarnição" : "o responsável"} e o destino para registrar.`, true);
   }
-  if (original?.status === "Emprestada" && el.value === "Disponível") up.devolucao_real = hojeLocalISO();
-  if (el.value !== "Emprestada") limparEmprestimoAtivo(up);
+  if (emprestado(original?.status) && el.value === "Disponível") up.devolucao_real = hojeLocalISO();
+  if (!emprestado(el.value)) limparEmprestimoAtivo(up);
+  else if (!emprestado(original.status)) up.devolucao_real = null;
   const { data, error } = await sb.from("frota").update(up).eq("id", Number(el.dataset.id)).select().single();
   if (error) { aviso(msgErro(error), true); return render(); }
   frota[frota.findIndex(v => v.id === data.id)] = data; render();
-  if (data.status === "Emprestada") {
+  if (emprestado(data.status)) {
     if (!await registrarNovoEmprestimo(data, "Status atualizado, mas não foi possível registrar o empréstimo: ")) return;
-  } else if (original.status === "Emprestada" && data.status === "Disponível") {
+  } else if (emprestado(original.status) && data.status === "Disponível") {
     if (!await registrarDevolucaoEmprestimo(data, "Status atualizado, mas não foi possível registrar a devolução no histórico: ")) return;
   }
   aviso("Status atualizado.");
