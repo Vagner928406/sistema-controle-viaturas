@@ -510,14 +510,19 @@ $("form").addEventListener("submit", async e => {
   frota.sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
   $("dlgForm").close(); render();
   if (novoEmprestimo) {
-    const { error: erroEmprestimo } = await sb.from("emprestimos").insert({
+    console.log("INICIANDO REGISTRO DE EMPRÉSTIMO");
+    const { data: empData, error: erroEmprestimo } = await sb.from("emprestimos").insert({
       viatura_id: data.id,
       responsavel: data.resp_emprestimo,
       destino: data.destino_emprestimo,
       data_saida: data.emprestada_desde || hojeLocalISO(),
       data_prevista: data.devolucao_prevista
-    });
-    if (erroEmprestimo) return aviso("Viatura salva, mas não foi possível registrar o empréstimo no histórico: " + msgErro(erroEmprestimo), true);
+    }).select("id");
+    console.log("RESULTADO: IDs retornados", (empData || []).map(emp => emp.id));
+    if (erroEmprestimo) {
+      console.error("ERRO AO REGISTRAR EMPRÉSTIMO:", erroEmprestimo);
+      return aviso("Viatura salva, mas não foi possível registrar o empréstimo no histórico: " + msgErro(erroEmprestimo), true);
+    }
   } else if (registrarDevolucao) {
     if (!await registrarDevolucaoEmprestimo(data, "Viatura devolvida, mas não foi possível atualizar o histórico de empréstimos: ")) return;
   }
