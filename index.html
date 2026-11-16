@@ -66,6 +66,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 .cab{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:2px 12px}
 .grade h3{grid-column:1/-1;margin:14px 0 0;font-size:13px;color:var(--azul2);border-bottom:1px solid var(--borda);padding-bottom:3px}
+.empRegistro{border-bottom:1px solid var(--borda);padding:10px;margin-bottom:8px}.empRegistro:last-child{border-bottom:0;margin-bottom:0}
 .rodape{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .hist{max-height:260px;overflow:auto;margin-top:8px}
 .hist table{min-width:520px}.hist th{padding:7px}.hist td{padding:6px 8px}
@@ -463,6 +464,15 @@ function abrirForm(v) {
   $("dlgForm").showModal();
 }
 
+async function registrarDevolucaoEmprestimo(v, contexto) {
+  const { error } = await sb.from("emprestimos")
+    .update({ data_retorno: v.devolucao_real })
+    .eq("viatura_id", v.id)
+    .is("data_retorno", null);
+  if (error) { aviso(contexto + msgErro(error), true); return false; }
+  return true;
+}
+
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   if (!admin) return;
@@ -475,6 +485,11 @@ $("form").addEventListener("submit", async e => {
   }
   const original = editando ? frota.find(v => v.id === editando) : null;
   if (original?.status === "Emprestada" && o.status === "Disponível") o.devolucao_real = hojeLocalISO();
+  if (o.status === "Emprestada" && original?.status !== "Emprestada" && (!o.resp_emprestimo || !o.destino_emprestimo))
+    return aviso("Informe o responsável e o destino antes de registrar o empréstimo.", true);
+  const novoEmprestimo = o.status === "Emprestada" && original?.status !== "Emprestada"
+    && o.resp_emprestimo && o.destino_emprestimo;
+  const registrarDevolucao = original?.status === "Emprestada" && o.status === "Disponível";
   if (o.status !== "Emprestada") limparEmprestimoAtivo(o);
   const anos = String(o.ano).split("/");
   if (!/^\d{4}(\/\d{4})?$/.test(o.ano) || anos.some(a => a < 1950 || a > 2100)) return aviso("Informe o ano como AAAA ou AAAA/AAAA.", true);
@@ -493,18 +508,31 @@ $("form").addEventListener("submit", async e => {
   const i = frota.findIndex(v => v.id === data.id);
   if (i >= 0) frota[i] = data; else frota.push(data);
   frota.sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
-  $("dlgForm").close(); render(); aviso("Viatura salva.");
+  $("dlgForm").close(); render();
+  if (novoEmprestimo) {
+    const { error: erroEmprestimo } = await sb.from("emprestimos").insert({
+      viatura_id: data.id,
+      responsavel: data.resp_emprestimo,
+      destino: data.destino_emprestimo,
+      data_saida: data.emprestada_desde || hojeLocalISO(),
+      data_prevista: data.devolucao_prevista
+    });
+    if (erroEmprestimo) return aviso("Viatura salva, mas não foi possível registrar o empréstimo no histórico: " + msgErro(erroEmprestimo), true);
+  } else if (registrarDevolucao) {
+    if (!await registrarDevolucaoEmprestimo(data, "Viatura devolvida, mas não foi possível atualizar o histórico de empréstimos: ")) return;
+  }
+  aviso("Viatura salva.");
 });
 
 async function excluir(v) {
   if (!admin) return aviso("Apenas administradores podem excluir.", true);
   const cont = t => sb.from(t).select("id", { count: "exact", head: true }).eq("viatura_id", v.id);
-  const [m, r] = await Promise.all([cont("manutencoes"), cont("reparos")]);
-  const qm = m.count ?? 0, qr = r.count ?? 0;
-  const msg = (m.error || r.error)
-    ? `Não foi possível conferir o histórico da viatura ${v.prefixo} / ${v.placa}. Ela pode ter manutenções e reparos que serão apagados junto.\n\nDeseja continuar?`
-    : qm + qr > 0
-      ? `ATENÇÃO: a viatura ${v.prefixo} / ${v.placa} tem ${qm} manutenção(ões) e ${qr} reparo(s) registrados.\n\nExcluir apaga a viatura e todo esse histórico, permanentemente.\n\nDeseja continuar?`
+  const [m, r, emp] = await Promise.all([cont("manutencoes"), cont("reparos"), cont("emprestimos")]);
+  const qm = m.count ?? 0, qr = r.count ?? 0, qe = emp.count ?? 0;
+  const msg = (m.error || r.error || emp.error)
+    ? `Não foi possível conferir todo o histórico da viatura ${v.prefixo} / ${v.placa}. Ela pode ter manutenções, reparos e empréstimos que serão apagados junto.\n\nDeseja continuar?`
+    : qm + qr + qe > 0
+      ? `ATENÇÃO: a viatura ${v.prefixo} / ${v.placa} tem ${qm} manutenção(ões), ${qr} reparo(s) e ${qe} empréstimo(s) registrados.\n\nExcluir apaga a viatura e todo esse histórico, permanentemente.\n\nDeseja continuar?`
       : `Excluir a viatura ${v.prefixo} / ${v.placa}?\n\nEssa ação não pode ser desfeita.`;
   if (!confirm(msg)) return;
   const digitado = prompt(`Para confirmar a exclusão, digite o prefixo da viatura: ${v.prefixo}`);
@@ -690,21 +718,32 @@ $("lista").addEventListener("click", e => {
 });
 
 let emprestimoId = null;
-function abrirEmprestimo(v) {
+async function abrirEmprestimo(v) {
   emprestimoId = v.id;
-  $("empTitulo").textContent = `Empréstimo — ${v.prefixo} / ${v.placa}`;
-  const campos = [
-    ["Status", v.status],
-    ["Responsável", v.resp_emprestimo],
-    ["Destino", v.destino_emprestimo],
-    ["Data de saída", v.emprestada_desde ? fmtData(v.emprestada_desde) : null],
-    ["Data prevista de retorno", v.devolucao_prevista ? fmtData(v.devolucao_prevista) : null],
-    ["Data de retorno", v.devolucao_real ? fmtData(v.devolucao_real) : null]
-  ];
-  $("empRes").innerHTML = `<div class="grade">${campos.map(([rot, valor]) =>
-    `<div><label>${rot}</label><div>${esc(valor) || "-"}</div></div>`).join("")}</div>`;
+  $("empTitulo").textContent = `Histórico de Empréstimos — ${v.prefixo}`;
+  $("empRes").innerHTML = "<p>Carregando histórico...</p>";
   $("empEditar").hidden = !admin;
   $("dlgEmp").showModal();
+  const finalizar = mostrarCarregamento("Carregando histórico de empréstimos...");
+  try {
+    const { data, error } = await sb.from("emprestimos")
+      .select("*")
+      .eq("viatura_id", v.id)
+      .order("data_saida", { ascending: false });
+    if (error) {
+      $("empRes").innerHTML = "";
+      return aviso(msgErro(error), true);
+    }
+    $("empRes").innerHTML = data.length
+      ? data.map(emp => `<div class="empRegistro">
+          <b>${esc(emp.destino) || "-"}</b><br>
+          Responsável: ${esc(emp.responsavel) || "-"}<br>
+          Saída: ${esc(fmtData(emp.data_saida))}<br>
+          Prevista: ${esc(fmtData(emp.data_prevista))}<br>
+          Retorno: ${esc(fmtData(emp.data_retorno))}
+        </div>`).join("")
+      : "<p>Nenhum empréstimo registrado.</p>";
+  } finally { finalizar(); }
 }
 $("empEditar").onclick = () => {
   const v = frota.find(x => x.id === emprestimoId);
@@ -743,7 +782,11 @@ async function aoAlterar(e) {
   if (el.value !== "Emprestada") limparEmprestimoAtivo(up);
   const { data, error } = await sb.from("frota").update(up).eq("id", Number(el.dataset.id)).select().single();
   if (error) { aviso(msgErro(error), true); return render(); }
-  frota[frota.findIndex(v => v.id === data.id)] = data; render(); aviso("Status atualizado.");
+  frota[frota.findIndex(v => v.id === data.id)] = data; render();
+  if (original?.status === "Emprestada" && data.status === "Disponível") {
+    if (!await registrarDevolucaoEmprestimo(data, "Status atualizado, mas não foi possível registrar a devolução no histórico: ")) return;
+  }
+  aviso("Status atualizado.");
 }
 $("lista").addEventListener("change", aoAlterar);
 $("kmLista").addEventListener("change", aoAlterar);
@@ -890,10 +933,10 @@ async function todos(t) {
 $("btnBackup").onclick = async () => {
   const finalizar = mostrarCarregamento("Gerando backup...");
   try {
-    let fr, m, rp, pf = [];
+    let fr, m, rp, emp, pf = [];
     const anexos = {};
     try {
-      fr = await todos("frota"); m = await todos("manutencoes"); rp = await todos("reparos");
+      fr = await todos("frota"); m = await todos("manutencoes"); rp = await todos("reparos"); emp = await todos("emprestimos");
       for (const v of fr) {
         const { data } = await sb.storage.from(BUCKET).list(`viatura_${v.id}`, { limit: 1000 });
         anexos[v.prefixo] = (data || []).map(f => f.name).filter(n => n !== ".emptyFolderPlaceholder");
@@ -901,7 +944,7 @@ $("btnBackup").onclick = async () => {
     } catch (e) { return aviso(msgErro(e), true); }
     try { pf = await todos("usuarios_perfis"); } catch {}
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota: fr, manutencoes: m, reparos: rp, perfis: pf, anexos_nomes: anexos }, null, 1)], { type: "application/json" }));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota: fr, manutencoes: m, reparos: rp, emprestimos: emp, perfis: pf, anexos_nomes: anexos }, null, 1)], { type: "application/json" }));
     a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
   } finally { finalizar(); }
 };
