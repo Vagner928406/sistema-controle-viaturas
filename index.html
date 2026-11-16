@@ -71,7 +71,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 .hist{max-height:260px;overflow:auto;margin-top:8px}
 .hist table{min-width:520px}.hist th{padding:7px}.hist td{padding:6px 8px}
 #aviso{position:fixed;inset:auto auto 16px 50%;transform:translateX(-50%);margin:0;border:0;max-width:calc(100% - 24px);background:var(--azul);color:#fff;padding:10px 18px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.3)}
-#aviso.erro{background:var(--verm);inset:16px auto auto 50%;font-weight:600}
+#aviso.erro{background:var(--verm);font-weight:600}
 #carregando{position:fixed;z-index:1000;top:14px;right:14px;display:flex;align-items:center;gap:9px;max-width:calc(100% - 28px);padding:10px 14px;border:1px solid var(--borda);border-radius:8px;background:#fff;color:var(--txt);box-shadow:0 4px 16px rgba(0,0,0,.18)}
 .spinner{width:18px;height:18px;flex:none;border:3px solid #d5dbe3;border-top-color:var(--azul2);border-radius:50%;animation:girar .8s linear infinite}
 @keyframes girar{to{transform:rotate(360deg)}}
@@ -809,8 +809,9 @@ async function aoAlterar(e) {
   if (!original) { aviso("Não foi possível localizar a viatura.", true); return render(); }
   const statusEmprestada = el.value === "Emprestada";
   if (statusEmprestada && (!original.resp_emprestimo || !original.destino_emprestimo)) {
-    aviso("Informe o responsável e o destino no formulário antes de registrar o empréstimo.", true);
-    return render();
+    render();
+    if (admin) { abrirForm(original); $("f_status").value = "Emprestada"; }
+    return aviso("Informe o responsável e o destino para registrar o empréstimo.", true);
   }
   if (original?.status === "Emprestada" && el.value === "Disponível") up.devolucao_real = hojeLocalISO();
   if (el.value !== "Emprestada") limparEmprestimoAtivo(up);
