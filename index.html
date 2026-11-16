@@ -510,15 +510,17 @@ $("form").addEventListener("submit", async e => {
   frota.sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
   $("dlgForm").close(); render();
   if (novoEmprestimo) {
-    console.log("INICIANDO REGISTRO DE EMPRÉSTIMO");
-    const { data: empData, error: erroEmprestimo } = await sb.from("emprestimos").insert({
+    console.log("novoEmprestimo =", novoEmprestimo);
+    console.log("data.id =", data.id);
+    console.log("responsavel =", data.resp_emprestimo);
+    console.log("destino =", data.destino_emprestimo);
+    const { error: erroEmprestimo } = await sb.from("emprestimos").insert({
       viatura_id: data.id,
       responsavel: data.resp_emprestimo,
       destino: data.destino_emprestimo,
       data_saida: data.emprestada_desde || hojeLocalISO(),
       data_prevista: data.devolucao_prevista
-    }).select("id");
-    console.log("RESULTADO: IDs retornados", (empData || []).map(emp => emp.id));
+    });
     if (erroEmprestimo) {
       console.error("ERRO EMPRÉSTIMO");
       console.error(erroEmprestimo);
