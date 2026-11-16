@@ -762,17 +762,53 @@ async function abrirEmprestimo(v) {
       $("empRes").innerHTML = "";
       return aviso(msgErro(error), true);
     }
-    $("empRes").innerHTML = data.length
-      ? data.map(emp => `<div class="empRegistro">
-          <b>${esc(emp.destino) || "-"}</b><br>
-          Responsável: ${esc(emp.responsavel) || "-"}<br>
-          Saída: ${esc(fmtData(emp.data_saida))}<br>
-          Prevista: ${esc(fmtData(emp.data_prevista))}<br>
-          Retorno: ${esc(fmtData(emp.data_retorno))}
-        </div>`).join("")
-      : "<p>Nenhum empréstimo registrado.</p>";
+    empRows = data; empEditId = null; renderEmp();
   } finally { finalizar(); }
 }
+let empRows = [], empEditId = null;
+function renderEmp() {
+  $("empRes").innerHTML = empRows.length ? empRows.map(emp => emp.id === empEditId
+    ? `<div class="empRegistro"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
+        <label>Destino<input data-f="destino" value="${esc(emp.destino || "")}" maxlength="120"></label>
+        <label>Responsável<input data-f="responsavel" value="${esc(emp.responsavel || "")}" maxlength="120"></label>
+        <label>Saída<input type="date" data-f="data_saida" value="${esc(emp.data_saida || "")}"></label>
+        <label>Prevista<input type="date" data-f="data_prevista" value="${esc(emp.data_prevista || "")}"></label>
+        <label>Retorno<input type="date" data-f="data_retorno" value="${esc(emp.data_retorno || "")}"></label>
+      </div>
+      <div class="acoes" style="margin-top:8px"><button type="button" class="ok" data-emp-salvar="${emp.id}">Salvar</button> <button type="button" class="sec" data-emp-cancelar>Cancelar</button></div></div>`
+    : `<div class="empRegistro">
+        <b>${esc(emp.destino) || "-"}</b><br>
+        Responsável: ${esc(emp.responsavel) || "-"}<br>
+        Saída: ${esc(fmtData(emp.data_saida))}<br>
+        Prevista: ${esc(fmtData(emp.data_prevista))}<br>
+        Retorno: ${esc(fmtData(emp.data_retorno))}
+        ${admin ? `<div class="acoes" style="margin-top:8px"><button type="button" class="sec" data-emp-edit="${emp.id}">Editar</button> <button type="button" class="perigo" data-emp-del="${emp.id}">Excluir</button></div>` : ""}
+      </div>`).join("") : "<p>Nenhum empréstimo registrado.</p>";
+}
+$("empRes").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b || !admin) return;
+  if (b.dataset.empEdit) { empEditId = Number(b.dataset.empEdit) || b.dataset.empEdit; return renderEmp(); }
+  if (b.hasAttribute("data-emp-cancelar")) { empEditId = null; return renderEmp(); }
+  if (b.dataset.empDel) {
+    const reg = empRows.find(x => String(x.id) === b.dataset.empDel);
+    if (!confirm(`Excluir este empréstimo?\n\n${reg ? (reg.destino || "-") + " - " + (reg.responsavel || "-") + " (" + fmtData(reg.data_saida) + ")" : ""}\n\nEssa ação não pode ser desfeita.`)) return;
+    const { data, error } = await sb.from("emprestimos").delete().eq("id", b.dataset.empDel).select();
+    if (error) return aviso(msgErro(error), true);
+    if (!data || !data.length) return aviso("Não foi possível excluir: sem permissão no banco (veja a política de exclusão da tabela emprestimos).", true);
+    empRows = empRows.filter(x => String(x.id) !== b.dataset.empDel);
+    renderEmp(); return aviso("Empréstimo excluído.");
+  }
+  if (b.dataset.empSalvar) {
+    const box = b.closest(".empRegistro"), val = f => box.querySelector(`[data-f="${f}"]`).value.trim();
+    if (!val("data_saida")) return aviso("Informe a data de saída.", true);
+    const upd = { destino: val("destino") || null, responsavel: val("responsavel") || null, data_saida: val("data_saida"), data_prevista: val("data_prevista") || null, data_retorno: val("data_retorno") || null };
+    const { data, error } = await sb.from("emprestimos").update(upd).eq("id", b.dataset.empSalvar).select();
+    if (error) return aviso(msgErro(error), true);
+    if (!data || !data.length) return aviso("Não foi possível salvar: sem permissão no banco.", true);
+    empRows = empRows.map(x => String(x.id) === b.dataset.empSalvar ? { ...x, ...upd } : x);
+    empEditId = null; renderEmp(); aviso("Empréstimo atualizado.");
+  }
+});
 $("empEditar").onclick = () => {
   const v = frota.find(x => x.id === emprestimoId);
   if (!v) return aviso("Não foi possível localizar a viatura.", true);
