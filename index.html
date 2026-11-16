@@ -414,9 +414,13 @@ function render() {
   });
   const n = s => frota.filter(v => v.status === s).length;
   const comAlerta = frota.filter(v => alertas(v).length).length;
+  const emprestimosAtrasados = frota.filter(v =>
+    v.status === "Emprestada" && v.devolucao_prevista && dias(v.devolucao_prevista) < 0
+  ).length;
   $("resumo").innerHTML = [["Total", frota.length],["Disponíveis", n("Disponível")],["Em manutenção", n("Manutenção")],
     ["Emprestadas", n("Emprestada")],["Baixadas", n("Baixada")]].map(([t, x]) => `<div><b>${x}</b>${t}</div>`).join("")
-    + `<div class="a"><b>${comAlerta}</b>Com alertas</div>`;
+    + `<div class="a"><b>${comAlerta}</b>Com alertas</div>`
+    + `<div class="${emprestimosAtrasados ? "a" : ""}"><b>${emprestimosAtrasados}</b>Empréstimos atrasados</div>`;
   const lista = filtradas();
   $("lista").innerHTML = lista.length ? lista.map(v => {
     const al = alertas(v), nrep = reparos.filter(r => r.viatura_id === v.id).length;
@@ -424,7 +428,7 @@ function render() {
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
       <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}<br>${idadeKm(v)}</td>
-      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}${v.status === "Emprestada" && v.destino_emprestimo ? `<br><small>→ ${esc(v.destino_emprestimo)}</small>` : ""}</td>
+      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}${v.status === "Emprestada" ? `<br><small>${esc(v.destino_emprestimo || "-")}<br>Resp.: ${esc(v.resp_emprestimo || "-")}</small>` : ""}</td>
       <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
       <td>${al.map(([t, m]) => `<span class="chip ${t}">${esc(m)}</span>`).join("") || "<small>Em dia</small>"}</td>
