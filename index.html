@@ -103,6 +103,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <button class="sec" id="btnAtualizar" title="Recarregar os dados">Atualizar</button>
   <button class="sec" id="btnPend">Pendências</button>
   <button class="sec" id="btnCustos">Custos</button>
+  <button class="sec" id="btnRel">Relatórios</button>
   <button class="sec so-admin" id="btnLog" hidden>Alterações</button>
   <button class="sec so-admin" id="btnUsr" hidden>Usuários</button>
   <button class="sec so-admin" id="btnBackup" hidden>Backup</button>
@@ -165,6 +166,17 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   </form>
   <p id="histTotal" style="margin:14px 0 0;font-weight:600"></p>
   <div class="hist" id="histLista"></div>
+</dialog>
+
+<dialog id="dlgRel">
+  <div class="cab"><h2>Relatório de manutenção</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
+  <div class="grade">
+    <div><label for="rViat">Viatura</label><select id="rViat"></select></div>
+    <div><label for="rDe">De</label><input type="date" id="rDe"></div>
+    <div><label for="rAte">Até</label><input type="date" id="rAte"></div>
+  </div>
+  <p><small>Escolha uma viatura para o relatório individual, ou “Todas” para o relatório geral. Deixe as datas em branco para incluir todo o período. Em “Imprimir / PDF”, escolha “Salvar como PDF” na janela de impressão se quiser o arquivo.</small></p>
+  <div class="rodape"><button type="button" id="rImprimir">Imprimir / PDF</button><button type="button" class="sec" id="rCsv">Baixar planilha</button></div>
 </dialog>
 
 <dialog id="dlgCustos">
@@ -990,6 +1002,70 @@ $("btnPend").onclick = () => {
       `<tr><td>${esc(v.prefixo)}<br>${esc(v.placa)}</td><td>${esc(v.marca)} ${esc(v.modelo)}</td><td>${fmtKm(v.km)}</td><td>${al.map(([t, m]) => (t === "v" ? "● " : "○ ") + esc(m)).join("<br>")}</td></tr>`).join("")}</table>
       <p>● vencido ou urgente &nbsp;&nbsp; ○ próximo do vencimento</p>` : "<p>Nenhuma pendência.</p>");
   window.print();
+};
+
+// ---------- Relatórios de manutenção ----------
+$("btnRel").onclick = () => {
+  const ord = [...frota].sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
+  const atual = $("rViat").value;
+  $("rViat").innerHTML = '<option value="">Todas as viaturas (relatório geral)</option>'
+    + ord.map(v => `<option value="${v.id}">${esc(v.prefixo)} — ${esc(v.placa)}</option>`).join("");
+  $("rViat").value = atual;
+  $("dlgRel").showModal();
+};
+async function dadosRelatorio() {
+  const de = $("rDe").value, ate = $("rAte").value, vid = $("rViat").value;
+  const rows = (await todos("manutencoes"))
+    .filter(r => (!vid || String(r.viatura_id) === vid) && (!de || r.data >= de) && (!ate || r.data <= ate))
+    .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const por = new Map();
+  rows.forEach(r => { if (!por.has(r.viatura_id)) por.set(r.viatura_id, []); por.get(r.viatura_id).push(r); });
+  const soma = regs => regs.reduce((t, r) => t + (Number(r.valor) || 0), 0);
+  const grupos = [...por.entries()]
+    .map(([id, regs]) => ({ v: frota.find(x => String(x.id) === String(id)), regs, total: soma(regs) }))
+    .filter(g => g.v)
+    .sort((a, b) => a.v.prefixo.localeCompare(b.v.prefixo, "pt-BR", { numeric: true }));
+  return { de, ate, vid, grupos, qtd: grupos.reduce((t, g) => t + g.regs.length, 0), total: grupos.reduce((t, g) => t + g.total, 0) };
+}
+$("rImprimir").onclick = async () => {
+  const finalizar = mostrarCarregamento("Gerando relatório...");
+  try {
+    const r = await dadosRelatorio();
+    const periodo = r.de || r.ate ? `${r.de ? fmtData(r.de) : "início"} a ${r.ate ? fmtData(r.ate) : "hoje"}` : "todo o período";
+    const tabela = regs => `<table class="fx"><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th></tr>${regs.map(x =>
+      `<tr><td>${fmtData(x.data)}</td><td>${fmtKm(x.km)}</td><td>${esc(x.descricao)}</td><td>${esc(x.oficina) || "-"}</td><td>${x.valor != null ? brl(x.valor) : "-"}</td></tr>`).join("")}</table>`;
+    const cab = `<p>Emitido em ${new Date().toLocaleDateString("pt-BR")} · Período: ${periodo}</p>`;
+    if (!r.grupos.length) $("ficha").innerHTML = `<h1 style="margin:0">Relatório de manutenção</h1>${cab}<p>Nenhum registro de manutenção no período.</p>`;
+    else if (r.vid) {
+      const g = r.grupos[0];
+      $("ficha").innerHTML = `<h1 style="margin:0">Relatório de manutenção — ${esc(g.v.prefixo)} / ${esc(g.v.placa)}</h1>
+        <p>${esc(g.v.marca)} ${esc(g.v.modelo)} · KM atual: ${fmtKm(g.v.km)}</p>${cab}${tabela(g.regs)}
+        <p><b>${g.regs.length} serviço(s) · custo total ${brl(g.total)}</b></p>`;
+    } else {
+      $("ficha").innerHTML = `<h1 style="margin:0">Relatório geral de manutenção</h1>${cab}
+        <h2>Resumo por viatura</h2><table class="fx"><tr><th>Viatura</th><th>Veículo</th><th>Serviços</th><th>Custo</th></tr>${r.grupos.map(g =>
+          `<tr><td>${esc(g.v.prefixo)}<br>${esc(g.v.placa)}</td><td>${esc(g.v.marca)} ${esc(g.v.modelo)}</td><td>${g.regs.length}</td><td>${brl(g.total)}</td></tr>`).join("")}
+          <tr><th colspan="2">Total geral</th><th>${r.qtd}</th><th>${brl(r.total)}</th></tr></table>
+        <h2>Detalhamento</h2>${r.grupos.map(g => `<div style="break-inside:avoid-page"><h3 style="margin:14px 0 6px">${esc(g.v.prefixo)} / ${esc(g.v.placa)} — ${esc(g.v.marca)} ${esc(g.v.modelo)}</h3>${tabela(g.regs)}
+          <p style="margin:0 0 10px"><b>Subtotal: ${g.regs.length} serviço(s) · ${brl(g.total)}</b></p></div>`).join("")}`;
+    }
+    window.print();
+  } catch (e) { aviso(msgErro(e), true); } finally { finalizar(); }
+};
+$("rCsv").onclick = async () => {
+  const finalizar = mostrarCarregamento("Gerando planilha...");
+  try {
+    const r = await dadosRelatorio();
+    if (!r.grupos.length) return aviso("Nenhum registro de manutenção no período.", true);
+    const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const linhas = [["Viatura", "Placa", "Veículo", "Data", "KM", "Serviço", "Oficina", "Valor"]];
+    r.grupos.forEach(g => g.regs.forEach(x => linhas.push([g.v.prefixo, g.v.placa, `${g.v.marca ?? ""} ${g.v.modelo ?? ""}`.trim(), fmtData(x.data), x.km, x.descricao, x.oficina, x.valor == null ? "" : String(x.valor).replace(".", ",")])));
+    const csv = "\uFEFF" + linhas.map(l => l.map(cel).join(";")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const nome = r.vid ? r.grupos[0].v.prefixo : "geral";
+    a.download = `manutencao-${nome}-${hojeLocalISO()}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  } catch (e) { aviso(msgErro(e), true); } finally { finalizar(); }
 };
 
 // ---------- Backup ----------
