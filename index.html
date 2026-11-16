@@ -137,6 +137,12 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   </form>
 </dialog>
 
+<dialog id="dlgEmp">
+  <div class="cab"><h2 id="empTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
+  <div id="empRes"></div>
+  <div class="rodape"><button type="button" class="ok" id="empEditar" hidden>Editar dados</button></div>
+</dialog>
+
 <dialog id="dlgHist">
   <div class="cab"><h2 id="histTitulo"></h2><button type="button" class="sec" data-fechar>Fechar</button></div>
   <form id="formHist" class="so-admin" hidden>
@@ -266,7 +272,8 @@ const CAMPOS = [
   ["prefixo","Prefixo","text","Identificação"],["placa","Placa","text"],["marca","Marca","text"],["modelo","Modelo","text"],
   ["ano","Ano (AAAA ou AAAA/AAAA)","text"],["emprego","Emprego","text"],["km","KM atual","number"],
   ["status","Status","select"],["observacao","Observação","text"],
-  ["emprestada_para","Emprestada para (quem/onde)","text","Empréstimo"],["emprestada_desde","Emprestada desde","date"],["devolucao_prevista","Devolução prevista","date"],
+  ["resp_emprestimo","Responsável","text","Empréstimo"],["destino_emprestimo","Destino","text"],
+  ["emprestada_desde","Data de saída","date"],["devolucao_prevista","Data prevista de retorno","date"],["devolucao_real","Data de retorno","date"],
   ["ultima_revisao","Última revisão/manutenção","date","Manutenção"],["troca_oleo","Data da próxima troca de óleo","date"],
   ["km_troca_oleo","KM da próxima troca de óleo","number"],["km_filtro_oleo","KM da próxima troca do filtro de óleo","number"],
   ["km_filtro_combustivel","KM da próxima troca do filtro de combustível","number"],["km_filtro_ar","KM da próxima troca do filtro de ar","number"],
@@ -283,12 +290,19 @@ const CAMPOS = [
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
 const DECIMAIS = ["valor_aquisicao"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Baixada"];
+const limparEmprestimoAtivo = o => Object.assign(o, {
+  resp_emprestimo: null,
+  destino_emprestimo: null,
+  emprestada_desde: null,
+  devolucao_prevista: null
+});
 
 let admin = false, podeKm = false, frota = [], reparos = [], editando = null, histId = null, histRows = [], histEdit = null;
 
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtKm = v => v == null ? "-" : Number(v).toLocaleString("pt-BR");
 const fmtData = d => d ? d.split("-").reverse().join("/") : "-";
+const hojeLocalISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 if (!$("aviso").showPopover) $("aviso").hidden = true; // navegador sem popover: a caixa começa escondida
@@ -410,12 +424,12 @@ function render() {
       <td><button class="pref" data-a="dados" title="Ver dados técnicos">${esc(v.prefixo)}</button><br><small>${esc(v.placa)}</small></td>
       <td>${esc(v.marca)} ${esc(v.modelo)}<br><small>${esc(v.ano)}${v.emprego ? " · " + esc(v.emprego) : ""}</small></td>
       <td>${podeKm ? `<input type="text" inputmode="numeric" class="kmin" data-id="${v.id}" value="${fmtKm(v.km ?? 0)}" aria-label="KM atual">` : fmtKm(v.km)}<br>${idadeKm(v)}</td>
-      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}${v.status === "Emprestada" && v.emprestada_para ? `<br><small>→ ${esc(v.emprestada_para)}</small>` : ""}</td>
+      <td class="st st-${esc(v.status)}">${admin ? `<select class="stsel" data-id="${v.id}" aria-label="Alterar status">${STATUS.map(x => `<option${x === v.status ? " selected" : ""}>${x}</option>`).join("")}</select>` : esc(v.status)}${v.status === "Emprestada" && v.destino_emprestimo ? `<br><small>→ ${esc(v.destino_emprestimo)}</small>` : ""}</td>
       <td>${fmtData(v.troca_oleo)}<br><small>${v.km_troca_oleo != null ? fmtKm(v.km_troca_oleo) + " km" : "-"}</small></td>
       <td><small>Óleo ${fmtKm(v.km_filtro_oleo)}<br>Comb. ${fmtKm(v.km_filtro_combustivel)}<br>Ar ${fmtKm(v.km_filtro_ar)}</small></td>
       <td>${al.map(([t, m]) => `<span class="chip ${t}">${esc(m)}</span>`).join("") || "<small>Em dia</small>"}</td>
       <td>${admin ? `<textarea class="obs" data-id="${v.id}" rows="2" maxlength="500" placeholder="Adicionar observação" aria-label="Observações">${esc(v.observacao)}</textarea>` : esc(v.observacao) || "-"}</td>
-      <td class="acoes"><button data-a="hist">Histórico</button> <button class="sec" data-a="dados">Dados</button> <button class="${nrep ? "pend" : ""}" data-a="rep">Reparos${nrep ? ` (${nrep})` : ""}</button>
+      <td class="acoes"><button data-a="hist">Histórico</button> <button class="sec" data-a="emp">Empréstimos</button> <button class="sec" data-a="dados">Dados</button> <button class="${nrep ? "pend" : ""}" data-a="rep">Reparos${nrep ? ` (${nrep})` : ""}</button>
         <button class="sec" data-a="ver">${admin ? "Editar" : "Detalhes"}</button>
         ${admin ? '<button class="perigo" data-a="del">Excluir</button>' : ""}</td></tr>`;
   }).join("") : `<tr><td colspan="9" class="vazio">Nenhuma viatura encontrada.${admin ? " Use “Nova viatura” para cadastrar." : ""}</td></tr>`;
@@ -455,7 +469,9 @@ $("form").addEventListener("submit", async e => {
     if (MAIUSC.includes(c)) val = val.toLocaleUpperCase("pt-BR");
     o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
-  if (o.status !== "Emprestada") { o.emprestada_para = null; o.emprestada_desde = null; o.devolucao_prevista = null; }
+  const original = editando ? frota.find(v => v.id === editando) : null;
+  if (original?.status === "Emprestada" && o.status === "Disponível") o.devolucao_real = hojeLocalISO();
+  if (o.status !== "Emprestada") limparEmprestimoAtivo(o);
   const anos = String(o.ano).split("/");
   if (!/^\d{4}(\/\d{4})?$/.test(o.ano) || anos.some(a => a < 1950 || a > 2100)) return aviso("Informe o ano como AAAA ou AAAA/AAAA.", true);
   let alvo = o;
@@ -512,7 +528,7 @@ async function abrirHist(v) {
   histId = v.id;
   $("histTitulo").textContent = `Histórico — ${v.prefixo} / ${v.placa}`;
   sairEdicaoHist();
-  $("hData").max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  $("hData").max = hojeLocalISO();
   $("dlgHist").showModal(); await listarHist();
 }
 
@@ -661,8 +677,38 @@ $("btnCsv").onclick = () => {
 $("lista").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   const v = frota.find(x => x.id === Number(b.closest("tr").dataset.id));
-  if (b.dataset.a === "hist") abrirHist(v); else if (b.dataset.a === "dados") abrirDados(v); else if (b.dataset.a === "rep") abrirReparos(v); else if (b.dataset.a === "ver") abrirForm(v); else if (b.dataset.a === "del") excluir(v);
+  if (b.dataset.a === "hist") abrirHist(v);
+  else if (b.dataset.a === "emp") abrirEmprestimo(v);
+  else if (b.dataset.a === "dados") abrirDados(v);
+  else if (b.dataset.a === "rep") abrirReparos(v);
+  else if (b.dataset.a === "ver") abrirForm(v);
+  else if (b.dataset.a === "del") excluir(v);
 });
+
+let emprestimoId = null;
+function abrirEmprestimo(v) {
+  emprestimoId = v.id;
+  $("empTitulo").textContent = `Empréstimo — ${v.prefixo} / ${v.placa}`;
+  const campos = [
+    ["Status", v.status],
+    ["Responsável", v.resp_emprestimo],
+    ["Destino", v.destino_emprestimo],
+    ["Data de saída", v.emprestada_desde ? fmtData(v.emprestada_desde) : null],
+    ["Data prevista de retorno", v.devolucao_prevista ? fmtData(v.devolucao_prevista) : null],
+    ["Data de retorno", v.devolucao_real ? fmtData(v.devolucao_real) : null]
+  ];
+  $("empRes").innerHTML = `<div class="grade">${campos.map(([rot, valor]) =>
+    `<div><label>${rot}</label><div>${esc(valor) || "-"}</div></div>`).join("")}</div>`;
+  $("empEditar").hidden = !admin;
+  $("dlgEmp").showModal();
+}
+$("empEditar").onclick = () => {
+  const v = frota.find(x => x.id === emprestimoId);
+  if (!v) return aviso("Não foi possível localizar a viatura.", true);
+  $("dlgEmp").close();
+  abrirForm(v);
+};
+
 async function aoAlterar(e) {
   const ki = e.target.closest(".kmin");
   if (ki) {
@@ -688,7 +734,9 @@ async function aoAlterar(e) {
   }
   const el = e.target.closest(".stsel"); if (!el) return;
   const up = { status: el.value };
-  if (el.value !== "Emprestada") Object.assign(up, { emprestada_para: null, emprestada_desde: null, devolucao_prevista: null });
+  const original = frota.find(v => v.id === Number(el.dataset.id));
+  if (original?.status === "Emprestada" && el.value === "Disponível") up.devolucao_real = hojeLocalISO();
+  if (el.value !== "Emprestada") limparEmprestimoAtivo(up);
   const { data, error } = await sb.from("frota").update(up).eq("id", Number(el.dataset.id)).select().single();
   if (error) { aviso(msgErro(error), true); return render(); }
   frota[frota.findIndex(v => v.id === data.id)] = data; render(); aviso("Status atualizado.");
