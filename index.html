@@ -520,8 +520,9 @@ $("form").addEventListener("submit", async e => {
     }).select("id");
     console.log("RESULTADO: IDs retornados", (empData || []).map(emp => emp.id));
     if (erroEmprestimo) {
-      console.error("ERRO AO REGISTRAR EMPRÉSTIMO:", erroEmprestimo);
-      return aviso("Viatura salva, mas não foi possível registrar o empréstimo no histórico: " + msgErro(erroEmprestimo), true);
+      console.error("ERRO EMPRÉSTIMO");
+      console.error(erroEmprestimo);
+      return aviso("Erro empréstimo: " + msgErro(erroEmprestimo), true);
     }
   } else if (registrarDevolucao) {
     if (!await registrarDevolucaoEmprestimo(data, "Viatura devolvida, mas não foi possível atualizar o histórico de empréstimos: ")) return;
