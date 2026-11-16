@@ -473,6 +473,42 @@ async function registrarDevolucaoEmprestimo(v, contexto) {
   return true;
 }
 
+async function registrarNovoEmprestimo(v, contexto) {
+  const { data: aberto, error: erroBusca } = await sb.from("emprestimos")
+    .select("id")
+    .eq("viatura_id", v.id)
+    .is("data_retorno", null)
+    .maybeSingle();
+  if (erroBusca) {
+    console.error("ERRO AO VERIFICAR EMPRÉSTIMO ABERTO");
+    console.error(erroBusca);
+    aviso(contexto + msgErro(erroBusca), true);
+    return false;
+  }
+  if (aberto) {
+    console.log("Empréstimo aberto já registrado:", aberto.id);
+    return true;
+  }
+  console.log("novoEmprestimo =", true);
+  console.log("data.id =", v.id);
+  console.log("responsavel =", v.resp_emprestimo);
+  console.log("destino =", v.destino_emprestimo);
+  const { error } = await sb.from("emprestimos").insert({
+    viatura_id: v.id,
+    responsavel: v.resp_emprestimo,
+    destino: v.destino_emprestimo,
+    data_saida: v.emprestada_desde || hojeLocalISO(),
+    data_prevista: v.devolucao_prevista
+  });
+  if (error) {
+    console.error("ERRO EMPRÉSTIMO");
+    console.error(error);
+    aviso(contexto + msgErro(error), true);
+    return false;
+  }
+  return true;
+}
+
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   if (!admin) return;
@@ -487,8 +523,7 @@ $("form").addEventListener("submit", async e => {
   if (original?.status === "Emprestada" && o.status === "Disponível") o.devolucao_real = hojeLocalISO();
   if (o.status === "Emprestada" && original?.status !== "Emprestada" && (!o.resp_emprestimo || !o.destino_emprestimo))
     return aviso("Informe o responsável e o destino antes de registrar o empréstimo.", true);
-  const novoEmprestimo = o.status === "Emprestada" && original?.status !== "Emprestada"
-    && o.resp_emprestimo && o.destino_emprestimo;
+  const registrarEmprestimo = Boolean(o.status === "Emprestada" && o.resp_emprestimo && o.destino_emprestimo);
   const registrarDevolucao = original?.status === "Emprestada" && o.status === "Disponível";
   if (o.status !== "Emprestada") limparEmprestimoAtivo(o);
   const anos = String(o.ano).split("/");
@@ -509,23 +544,8 @@ $("form").addEventListener("submit", async e => {
   if (i >= 0) frota[i] = data; else frota.push(data);
   frota.sort((a, b) => a.prefixo.localeCompare(b.prefixo, "pt-BR", { numeric: true }));
   $("dlgForm").close(); render();
-  if (novoEmprestimo) {
-    console.log("novoEmprestimo =", novoEmprestimo);
-    console.log("data.id =", data.id);
-    console.log("responsavel =", data.resp_emprestimo);
-    console.log("destino =", data.destino_emprestimo);
-    const { error: erroEmprestimo } = await sb.from("emprestimos").insert({
-      viatura_id: data.id,
-      responsavel: data.resp_emprestimo,
-      destino: data.destino_emprestimo,
-      data_saida: data.emprestada_desde || hojeLocalISO(),
-      data_prevista: data.devolucao_prevista
-    });
-    if (erroEmprestimo) {
-      console.error("ERRO EMPRÉSTIMO");
-      console.error(erroEmprestimo);
-      return aviso("Erro empréstimo: " + msgErro(erroEmprestimo), true);
-    }
+  if (registrarEmprestimo) {
+    if (!await registrarNovoEmprestimo(data, "Erro empréstimo: ")) return;
   } else if (registrarDevolucao) {
     if (!await registrarDevolucaoEmprestimo(data, "Viatura devolvida, mas não foi possível atualizar o histórico de empréstimos: ")) return;
   }
@@ -786,12 +806,20 @@ async function aoAlterar(e) {
   const el = e.target.closest(".stsel"); if (!el) return;
   const up = { status: el.value };
   const original = frota.find(v => v.id === Number(el.dataset.id));
+  if (!original) { aviso("Não foi possível localizar a viatura.", true); return render(); }
+  const statusEmprestada = el.value === "Emprestada";
+  if (statusEmprestada && (!original.resp_emprestimo || !original.destino_emprestimo)) {
+    aviso("Informe o responsável e o destino no formulário antes de registrar o empréstimo.", true);
+    return render();
+  }
   if (original?.status === "Emprestada" && el.value === "Disponível") up.devolucao_real = hojeLocalISO();
   if (el.value !== "Emprestada") limparEmprestimoAtivo(up);
   const { data, error } = await sb.from("frota").update(up).eq("id", Number(el.dataset.id)).select().single();
   if (error) { aviso(msgErro(error), true); return render(); }
   frota[frota.findIndex(v => v.id === data.id)] = data; render();
-  if (original?.status === "Emprestada" && data.status === "Disponível") {
+  if (data.status === "Emprestada") {
+    if (!await registrarNovoEmprestimo(data, "Status atualizado, mas não foi possível registrar o empréstimo: ")) return;
+  } else if (original.status === "Emprestada" && data.status === "Disponível") {
     if (!await registrarDevolucaoEmprestimo(data, "Status atualizado, mas não foi possível registrar a devolução no histórico: ")) return;
   }
   aviso("Status atualizado.");
