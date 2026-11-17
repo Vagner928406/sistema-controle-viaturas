@@ -31,6 +31,12 @@ main{padding:18px 20px;max-width:1500px;margin:auto}
 .resumo div{background:#fff;border:1px solid var(--borda);border-left:5px solid var(--azul2);border-radius:8px;padding:10px 14px}
 .resumo b{display:block;font-size:26px;line-height:1.1}
 .resumo .a{border-left-color:var(--verm)}.resumo .a b{color:var(--verm)}
+.porEmp{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px}
+.porEmp>span{font-size:12px;font-weight:700;color:var(--azul2);text-transform:uppercase;letter-spacing:.04em;margin-right:4px}
+.porEmp button{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--txt);border:1px solid var(--borda);border-radius:20px;padding:5px 6px 5px 12px;font-size:13px}
+.porEmp button b{background:var(--azul2);color:#fff;border-radius:12px;min-width:26px;padding:1px 8px;text-align:center;font-size:13px}
+.porEmp button.ativo{background:var(--azul);color:#fff;border-color:var(--azul)}
+.porEmp button.ativo b{background:#fff;color:var(--azul)}
 .barra{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .barra input[type=search]{flex:2;min-width:220px}.barra select{flex:1;min-width:150px}
 .barra label{display:flex;gap:6px;align-items:center;margin:0;font-size:13px}
@@ -113,6 +119,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 </header>
 <main>
   <section class="resumo" id="resumo"></section>
+  <section class="porEmp" id="porEmprego" aria-label="Viaturas por emprego"></section>
   <div class="barra">
     <input type="search" id="busca" placeholder="Pesquisar prefixo, placa, marca, modelo, emprego ou observação" aria-label="Pesquisar">
     <select id="fStatus" aria-label="Filtrar por status">
@@ -458,6 +465,12 @@ function render() {
     ["Emprestadas", n("Emprestada")],["Curso/Operação", n("Curso/Operação")],["Baixadas", n("Baixada")]].map(([t, x]) => `<div><b>${x}</b>${t}</div>`).join("")
     + `<div class="a"><b>${comAlerta}</b>Com alertas</div>`
     + `<div class="${emprestimosAtrasados ? "a" : ""}"><b>${emprestimosAtrasados}</b>Empréstimos atrasados</div>`;
+  const contEmp = {}; let semEmp = 0;
+  frota.forEach(v => { if (v.emprego) contEmp[v.emprego] = (contEmp[v.emprego] || 0) + 1; else semEmp++; });
+  $("porEmprego").hidden = !frota.length;
+  $("porEmprego").innerHTML = "<span>Por emprego</span>" + emps.map(e =>
+    `<button type="button" class="${e === sel.value ? "ativo" : ""}" data-emp="${esc(e)}" aria-pressed="${e === sel.value}">${esc(e)} <b>${contEmp[e]}</b></button>`).join("")
+    + (semEmp ? `<button type="button" disabled>Sem emprego <b>${semEmp}</b></button>` : "");
   const lista = filtradas();
   $("lista").innerHTML = lista.length ? lista.map(v => {
     const al = alertas(v), nrep = reparos.filter(r => r.viatura_id === v.id).length;
@@ -1407,6 +1420,11 @@ $("hCancelar").onclick = () => sairEdicaoHist();
 $("formHist").addEventListener("input", e => {
   if (e.target.id === "hDesc" && !histEdit) marcarPorDescricao();
   atualizarPrevia();
+});
+$("porEmprego").addEventListener("click", e => {
+  const b = e.target.closest("button[data-emp]"); if (!b) return;
+  $("fEmprego").value = $("fEmprego").value === b.dataset.emp ? "" : b.dataset.emp;
+  render();
 });
 ["busca", "fStatus", "fEmprego", "fAlerta"].forEach(id => $(id).addEventListener("input", render));
 document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.closest("dialog").close());
