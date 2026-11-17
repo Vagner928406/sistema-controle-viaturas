@@ -1194,11 +1194,13 @@ $("usrRes").addEventListener("change", async e => {
 $("btnUsr").onclick = abrirUsuarios;
 
 // ---------- Reparos a fazer ----------
-let repId = null, repRows = [];
+let repId = null, repRows = [], repEdit = null;
 async function abrirReparos(v) {
   repId = v.id;
+  repEdit = null;
   $("repTitulo").textContent = `Reparos a fazer — ${v.prefixo} / ${v.placa}`;
   $("formRep").reset();
+  $("formRep").querySelector('[type="submit"]').textContent = "Adicionar reparo";
   $("dlgRep").showModal(); await listarReparos();
 }
 async function listarReparos() {
@@ -1210,9 +1212,14 @@ async function listarReparos() {
   const prazo = r => r.prazo ? `<br><small${dias(r.prazo) < 0 ? ' style="color:var(--verm);font-weight:700"' : ""}>Prazo: ${fmtData(r.prazo)}${dias(r.prazo) < 0 ? " (atrasado)" : ""}</small>` : "";
   $("repLista").innerHTML = (pend.length
     ? `<table style="min-width:0"><tbody>${pend.map(r => `<tr><td>${r.prioridade === "Urgente" ? '<span class="chip v">Urgente</span> ' : ""}${esc(r.descricao)}${prazo(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td>
-      <td class="acoes">${admin ? `<button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
+      <td class="acoes">${admin ? `<button class="sec" data-editar="${r.id}">Editar</button> <button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
     : "<p>Nenhum reparo pendente.</p>")
-    + (feitos.length ? `<h3>Concluídos</h3><table style="min-width:0"><tbody>${feitos.map(r => `<tr><td>${esc(r.descricao)}<br><small>Concluído em ${dt(r.concluido_em)}</small></td></tr>`).join("")}</tbody></table>` : "");
+    + (feitos.length ? `<h3>Concluídos</h3><table style="min-width:0"><tbody>${feitos.map(r => `
+      <tr>
+        <td>${esc(r.descricao)}<br><small>Concluído em ${dt(r.concluido_em)}</small></td>
+        <td class="acoes">${admin ? `<button class="sec" data-editar="${r.id}">Editar</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td>
+      </tr>
+    `).join("")}</tbody></table>` : "");
 }
 async function recarregarReparos() {
   const r = await sb.from("reparos").select("*").eq("concluido", false);
@@ -1221,13 +1228,38 @@ async function recarregarReparos() {
 }
 $("formRep").addEventListener("submit", async e => {
   e.preventDefault(); if (!admin) return;
-  const { error } = await sb.from("reparos").insert({ viatura_id: repId, descricao: $("rDesc").value.trim(), prioridade: $("rPrio").value, prazo: $("rPrazo").value || null });
+  const registro = {
+    viatura_id: repId,
+    descricao: $("rDesc").value.trim(),
+    prioridade: $("rPrio").value,
+    prazo: $("rPrazo").value || null
+  };
+  let error;
+  if (repEdit) {
+    ({ error } = await sb.from("reparos").update(registro).eq("id", repEdit));
+  } else {
+    ({ error } = await sb.from("reparos").insert(registro));
+  }
   if (error) return aviso(msgErro(error), true);
-  $("formRep").reset(); await recarregarReparos(); aviso("Reparo registrado. A viatura agora tem um alerta.");
+  const editando = repEdit !== null;
+  repEdit = null;
+  $("formRep").reset();
+  $("formRep").querySelector('[type="submit"]').textContent = "Adicionar reparo";
+  await recarregarReparos();
+  aviso(editando ? "Reparo atualizado." : "Reparo registrado. A viatura agora tem um alerta.");
 });
 $("repLista").addEventListener("click", async e => {
   const b = e.target.closest("button"); if (!b || !admin) return;
-  if (b.dataset.concluir) {
+  if (b.dataset.editar) {
+    const r = repRows.find(x => x.id === Number(b.dataset.editar));
+    if (!r) return aviso("Não foi possível localizar o reparo para editar.", true);
+    repEdit = r.id;
+    $("rDesc").value = r.descricao || "";
+    $("rPrio").value = r.prioridade || "Normal";
+    $("rPrazo").value = r.prazo || "";
+    $("formRep").querySelector('[type="submit"]').textContent = "Salvar alterações";
+    $("rDesc").focus();
+  } else if (b.dataset.concluir) {
     const { error } = await sb.from("reparos").update({ concluido: true, concluido_em: new Date().toISOString() }).eq("id", Number(b.dataset.concluir));
     if (error) return aviso(msgErro(error), true);
     await recarregarReparos(); aviso("Reparo concluído.");
