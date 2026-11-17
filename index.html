@@ -154,6 +154,21 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
       <div><label for="hKm">KM da viatura</label><input type="text" inputmode="numeric" class="milhar" id="hKm" required></div>
       <div><label for="hOficina">Oficina/Responsável</label><input id="hOficina"></div>
       <div><label for="hValor">Valor (R$)</label><input type="number" id="hValor" min="0" step="0.01"></div>
+      <div>
+        <label for="hFonte">Fonte do recurso</label>
+        <select id="hFonte">
+          <option value="">Selecione</option>
+          <option>Convênio de Trânsito Centralizado</option>
+          <option>FUMREPOM</option>
+          <option>Convênio Rádio Patrulha</option>
+          <option>Recursos Próprios</option>
+          <option>Outros</option>
+        </select>
+        <div id="boxFonteOutro" hidden>
+          <label for="hFonteOutro">Qual a fonte do recurso?</label>
+          <input id="hFonteOutro" maxlength="100" placeholder="Ex.: Doação da Empresa XPTO">
+        </div>
+      </div>
     </div>
     <label for="hDesc">Serviço realizado</label>
     <input id="hDesc" placeholder="Ex.: troca de óleo e filtros" required>
@@ -630,6 +645,8 @@ function sairEdicaoHist() {
   histEdit = null;
   $("hSalvar").textContent = "Registrar manutenção"; $("hCancelar").hidden = true;
   $("formHist").reset();
+  $("boxFonteOutro").hidden = true;
+  $("hFonteOutro").value = "";
   montarAuto(); $("hAuto").hidden = false;
   const v = frota.find(x => x.id === histId); $("hKm").value = v?.km != null ? Number(v.km).toLocaleString("pt-BR") : "";
   atualizarPrevia();
@@ -697,22 +714,31 @@ async function listarHist() {
     histRows = data;
     const total = data.reduce((s, r) => s + (Number(r.valor) || 0), 0);
     $("histTotal").textContent = data.length ? `${data.length} registro(s) · custo total ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : "";
-    $("histLista").innerHTML = data.length ? `<table><thead><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Valor</th>${admin ? "<th></th>" : ""}</tr></thead><tbody>${data.map(r =>
-      `<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina) || "-"}</td>
+    $("histLista").innerHTML = data.length ? `<table><thead><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Fonte</th><th>Valor</th>${admin ? "<th></th>" : ""}</tr></thead><tbody>${data.map(r =>
+      `<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina) || "-"}</td><td>${esc(r.fonte_recurso) || "-"}</td>
        <td>${r.valor != null ? Number(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}</td>
        ${admin ? `<td class="acoes"><button class="sec" data-edit="${r.id}">Editar</button> <button class="perigo" data-del="${r.id}">Excluir</button></td>` : ""}</tr>`).join("")}</tbody></table>`
       : "<p>Nenhuma manutenção registrada.</p>";
   } finally { finalizar(); }
 }
 
+$("hFonte").addEventListener("change", () => {
+  const outro = $("hFonte").value === "Outros";
+  $("boxFonteOutro").hidden = !outro;
+  if (!outro) $("hFonteOutro").value = "";
+});
+
 $("formHist").addEventListener("submit", async e => {
   e.preventDefault();
   const reg = { viatura_id: histId, data: $("hData").value, km: Number($("hKm").value.replace(/\D/g, "")), descricao: $("hDesc").value.trim(),
-    oficina: $("hOficina").value.trim() || null, valor: $("hValor").value === "" ? null : Number($("hValor").value) };
+    oficina: $("hOficina").value.trim() || null, valor: $("hValor").value === "" ? null : Number($("hValor").value),
+    fonte_recurso: $("hFonte").value === "Outros"
+      ? $("hFonteOutro").value.trim() || null
+      : $("hFonte").value || null };
   if (!histEdit) {
     const prox = calcProximas();
     const { data, error } = await sb.rpc("registrar_manutencao", { p_viatura: histId, p_data: reg.data, p_km: reg.km, p_desc: reg.descricao,
-      p_oficina: reg.oficina, p_valor: reg.valor, p_prox: prox });
+      p_oficina: reg.oficina, p_valor: reg.valor, p_fonte_recurso: reg.fonte_recurso, p_prox: prox });
     if (error) return aviso(msgErro(error), true);
     const row = Array.isArray(data) ? data[0] : data, i = frota.findIndex(x => x.id === histId);
     if (row && i >= 0) { frota[i] = row; render(); }
@@ -720,7 +746,7 @@ $("formHist").addEventListener("submit", async e => {
     return aviso(Object.keys(prox).length ? "Manutenção registrada e próximas trocas atualizadas." : "Manutenção registrada.");
   }
   // a partir daqui só edição: o registro novo é feito pela função registrar_manutencao
-  const { error } = await sb.from("manutencoes").update({ data: reg.data, km: reg.km, descricao: reg.descricao, oficina: reg.oficina, valor: reg.valor }).eq("id", histEdit);
+  const { error } = await sb.from("manutencoes").update({ data: reg.data, km: reg.km, descricao: reg.descricao, oficina: reg.oficina, valor: reg.valor, fonte_recurso: reg.fonte_recurso }).eq("id", histEdit);
   if (error) return aviso(msgErro(error), true);
   // atualiza a viatura: última revisão e KM (apenas se o registro for mais recente/maior)
   const v = frota.find(x => x.id === histId), up = {};
@@ -743,7 +769,18 @@ $("histLista").addEventListener("click", async e => {
     const r = histRows.find(x => x.id === Number(e.target.dataset.edit)); if (!r) return;
     histEdit = r.id; $("hAuto").hidden = true;
     $("hData").value = r.data; $("hKm").value = Number(r.km).toLocaleString("pt-BR"); $("hOficina").value = r.oficina ?? "";
-    $("hValor").value = r.valor ?? ""; $("hDesc").value = r.descricao;
+    $("hValor").value = r.valor ?? "";
+    const fonteSalva = r.fonte_recurso ?? "";
+    const fontesPadrao = Array.from($("hFonte").options, o => o.value);
+    if (fonteSalva && (!fontesPadrao.includes(fonteSalva) || fonteSalva === "Outros")) {
+      $("hFonte").value = "Outros";
+      $("hFonte").dispatchEvent(new Event("change"));
+      $("hFonteOutro").value = fonteSalva;
+    } else {
+      $("hFonte").value = fonteSalva;
+      $("hFonte").dispatchEvent(new Event("change"));
+    }
+    $("hDesc").value = r.descricao;
     $("hSalvar").textContent = "Salvar alterações"; $("hCancelar").hidden = false;
     $("dlgHist").scrollTo({ top: 0, behavior: "smooth" }); $("hData").focus();
     return;
@@ -970,7 +1007,7 @@ async function gerarCustos() {
   try {
     let data = [], de = 0;
     for (;;) {
-      let q = sb.from("manutencoes").select("viatura_id,data,valor").order("id").range(de, de + 999);
+      let q = sb.from("manutencoes").select("viatura_id,data,valor,fonte_recurso").order("id").range(de, de + 999);
       if ($("cDe").value) q = q.gte("data", $("cDe").value);
       if ($("cAte").value) q = q.lte("data", $("cAte").value);
       const r = await q;
@@ -979,7 +1016,10 @@ async function gerarCustos() {
       if (r.data.length < 1000) break;
       de += 1000;
     }
-    const porV = {}, porM = {}; let total = 0;
+    const porV = {},
+      porM = {},
+      porFonte = {};
+    let total = 0;
     data.forEach(r => {
       const val = Number(r.valor) || 0;
       total += val;
@@ -994,6 +1034,9 @@ async function gerarCustos() {
 
       const m = r.data.slice(0, 7);
       porM[m] = (porM[m] || 0) + val;
+
+      const fonte = r.fonte_recurso || "Não informado";
+      porFonte[fonte] = (porFonte[fonte] || 0) + val;
     });
     const qtdViaturas =
       Object.keys(porV).length;
@@ -1010,6 +1053,13 @@ async function gerarCustos() {
     const barras = (ent, rot) => { const mx = Math.max(...ent.map(e => e[1]), 1); return ent.map(([k, t]) =>
       `<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="width:90px;font-size:12px">${esc(rot(k))}</span><div style="flex:1;background:#e4e8ee;border-radius:4px"><div style="width:${Math.max(t / mx * 100, 1)}%;background:var(--azul2);height:14px;border-radius:4px"></div></div><b style="width:96px;text-align:right;font-size:12px">${brl(t)}</b></div>`).join(""); };
     const topV = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).slice(0, 8).map(([id, x]) => [id, x.t]);
+    const topFontes = Object.entries(porFonte).sort((a, b) => b[1] - a[1]);
+    const tabelaFontes = topFontes.map(([fonte, valor]) => `
+      <tr>
+        <td>${esc(fonte)}</td>
+        <td>${brl(valor)}</td>
+      </tr>
+    `).join("");
     $("custosRes").innerHTML = `<p style="font-weight:700">
       ${data.length} serviço(s) · total ${brl(total)}
     </p>
@@ -1021,6 +1071,10 @@ async function gerarCustos() {
       <b>${brl(mediaViatura)}</b>
     </p>
       <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
+      <h3>Custos por fonte de recurso</h3>
+      ${barras(topFontes, f => f)}
+      <div class="hist"><table style="min-width:0"><thead><tr><th>Fonte de recurso</th><th>Valor</th></tr></thead>
+      <tbody>${tabelaFontes || '<tr><td colspan="2">Sem registros no período.</td></tr>'}</tbody></table></div>
       <h3>Custo por mês</h3>${barras(Object.entries(porM).sort(), k => k.split("-").reverse().join("/"))}<h3>Viaturas com maior custo</h3>${barras(topV, id => { const v = frota.find(f => f.id === Number(id)); return v ? v.prefixo : "Viatura " + id; })}<h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
   } finally { finalizar(); }
 }
