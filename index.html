@@ -907,6 +907,7 @@ $("empEditar").onclick = () => {
 };
 
 async function aoAlterar(e) {
+  if (e.target?.dataset) delete e.target.dataset.sujo;
   const ki = e.target.closest(".kmin");
   if (ki) {
     const dig = ki.value.replace(/\D/g, ""), v = frota.find(x => x.id === Number(ki.dataset.id)), novo = Number(dig);
@@ -1417,6 +1418,19 @@ function salvarAoSair() {
   const a = document.activeElement;
   if (a && a.matches?.(".kmin, .obs")) a.blur();
 }
+// O iOS não dispara "change" quando o script reescreve o valor durante a digitação (pontos de milhar).
+// Marcamos o campo como editado e, ao sair dele, salvamos se o valor realmente mudou.
+document.addEventListener("input", e => { const el = e.target.closest?.(".kmin, .obs"); if (el) el.dataset.sujo = "1"; });
+document.addEventListener("focusout", e => {
+  const el = e.target.closest?.(".kmin, .obs");
+  if (!el || el.dataset.sujo !== "1") return;
+  const v = frota.find(x => x.id === Number(el.dataset.id));
+  if (!v) return;
+  const mudou = el.classList.contains("kmin")
+    ? Number(el.value.replace(/\D/g, "")) !== Number(v.km ?? 0)
+    : el.value.trim() !== (v.observacao || "");
+  if (mudou) aoAlterar({ target: el }); else delete el.dataset.sujo;
+});
 document.addEventListener("pointerdown", e => {
   if (!e.target.closest("input, textarea, select")) salvarAoSair();
 });
