@@ -16,7 +16,7 @@ button{border:0;border-radius:6px;padding:8px 13px;cursor:pointer;background:var
 button:hover{filter:brightness(1.12)}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #7db3e6;outline-offset:1px}
 .sec{background:#e4e8ee;color:var(--txt)}.perigo{background:var(--verm)}.ok{background:var(--verde)}
-input,select{width:100%;padding:9px;border:1px solid var(--borda);border-radius:6px;background:#fff}
+input,select,textarea{width:100%;padding:9px;border:1px solid var(--borda);border-radius:6px;background:#fff}
 #f_resp_emprestimo,.empRegistro textarea{width:100%;padding:9px;border:1px solid var(--borda);border-radius:6px;background:#fff;font:inherit;resize:vertical}
 input:disabled,select:disabled{background:#f1f3f6;color:#333}
 label{display:block;font-size:12px;font-weight:600;margin:8px 0 2px}
@@ -204,11 +204,16 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <form id="formRep" class="so-admin" hidden>
     <label for="rDesc">Reparo a fazer</label>
     <input id="rDesc" placeholder="Ex.: trocar pastilhas de freio" maxlength="300" required>
+    <label for="rSolucao">Solução adotada</label>
+    <textarea id="rSolucao" rows="4" maxlength="1000"></textarea>
     <div class="grade">
       <div><label for="rPrio">Prioridade</label><select id="rPrio"><option>Normal</option><option>Urgente</option></select></div>
       <div><label for="rPrazo">Prazo (opcional)</label><input type="date" id="rPrazo" min="2000-01-01" max="2100-12-31"></div>
     </div>
-    <div class="rodape"><button type="submit" class="ok">Adicionar reparo</button></div>
+    <div class="rodape">
+      <button type="submit" class="ok">Adicionar reparo</button>
+      <button type="button" class="sec" id="repCancelar" hidden>Cancelar edição</button>
+    </div>
   </form>
   <div id="repLista" style="margin-top:14px;max-height:50vh;overflow:auto"></div>
 </dialog>
@@ -1195,12 +1200,16 @@ $("btnUsr").onclick = abrirUsuarios;
 
 // ---------- Reparos a fazer ----------
 let repId = null, repRows = [], repEdit = null;
-async function abrirReparos(v) {
-  repId = v.id;
+function cancelarEdicaoReparo() {
   repEdit = null;
-  $("repTitulo").textContent = `Reparos a fazer — ${v.prefixo} / ${v.placa}`;
   $("formRep").reset();
   $("formRep").querySelector('[type="submit"]').textContent = "Adicionar reparo";
+  $("repCancelar").hidden = true;
+}
+async function abrirReparos(v) {
+  repId = v.id;
+  $("repTitulo").textContent = `Reparos a fazer — ${v.prefixo} / ${v.placa}`;
+  cancelarEdicaoReparo();
   $("dlgRep").showModal(); await listarReparos();
 }
 async function listarReparos() {
@@ -1210,13 +1219,15 @@ async function listarReparos() {
   const pend = data.filter(r => !r.concluido), feitos = data.filter(r => r.concluido).slice(0, 10);
   const dt = x => new Date(x).toLocaleDateString("pt-BR");
   const prazo = r => r.prazo ? `<br><small${dias(r.prazo) < 0 ? ' style="color:var(--verm);font-weight:700"' : ""}>Prazo: ${fmtData(r.prazo)}${dias(r.prazo) < 0 ? " (atrasado)" : ""}</small>` : "";
+  const solucao = r => r.observacao_solucao
+    ? `<br><small>Solução:<br>${esc(r.observacao_solucao).replace(/\n/g, "<br>")}</small>` : "";
   $("repLista").innerHTML = (pend.length
-    ? `<table style="min-width:0"><tbody>${pend.map(r => `<tr><td>${r.prioridade === "Urgente" ? '<span class="chip v">Urgente</span> ' : ""}${esc(r.descricao)}${prazo(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td>
+    ? `<table style="min-width:0"><tbody>${pend.map(r => `<tr><td>${r.prioridade === "Urgente" ? '<span class="chip v">Urgente</span> ' : ""}${esc(r.descricao)}${prazo(r)}${solucao(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td>
       <td class="acoes">${admin ? `<button class="sec" data-editar="${r.id}">Editar</button> <button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
     : "<p>Nenhum reparo pendente.</p>")
     + (feitos.length ? `<h3>Concluídos</h3><table style="min-width:0"><tbody>${feitos.map(r => `
       <tr>
-        <td>${esc(r.descricao)}<br><small>Concluído em ${dt(r.concluido_em)}</small></td>
+        <td>${esc(r.descricao)}<br><small>Concluído em ${dt(r.concluido_em)}</small>${solucao(r)}</td>
         <td class="acoes">${admin ? `<button class="sec" data-editar="${r.id}">Editar</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td>
       </tr>
     `).join("")}</tbody></table>` : "");
@@ -1228,26 +1239,32 @@ async function recarregarReparos() {
 }
 $("formRep").addEventListener("submit", async e => {
   e.preventDefault(); if (!admin) return;
+  const atual = repEdit !== null
+    ? repRows.find(x => x.id === repEdit)
+    : null;
+  if (repEdit !== null && !atual) return aviso("Não foi possível localizar o reparo para salvar.", true);
   const registro = {
     viatura_id: repId,
     descricao: $("rDesc").value.trim(),
+    observacao_solucao: $("rSolucao").value.trim() || null,
     prioridade: $("rPrio").value,
-    prazo: $("rPrazo").value || null
+    prazo: $("rPrazo").value || null,
+    concluido: atual?.concluido ?? false,
+    concluido_em: atual?.concluido_em ?? null
   };
   let error;
-  if (repEdit) {
+  if (repEdit !== null) {
     ({ error } = await sb.from("reparos").update(registro).eq("id", repEdit));
   } else {
     ({ error } = await sb.from("reparos").insert(registro));
   }
   if (error) return aviso(msgErro(error), true);
   const editando = repEdit !== null;
-  repEdit = null;
-  $("formRep").reset();
-  $("formRep").querySelector('[type="submit"]').textContent = "Adicionar reparo";
+  cancelarEdicaoReparo();
   await recarregarReparos();
   aviso(editando ? "Reparo atualizado." : "Reparo registrado. A viatura agora tem um alerta.");
 });
+$("repCancelar").onclick = cancelarEdicaoReparo;
 $("repLista").addEventListener("click", async e => {
   const b = e.target.closest("button"); if (!b || !admin) return;
   if (b.dataset.editar) {
@@ -1255,9 +1272,11 @@ $("repLista").addEventListener("click", async e => {
     if (!r) return aviso("Não foi possível localizar o reparo para editar.", true);
     repEdit = r.id;
     $("rDesc").value = r.descricao || "";
+    $("rSolucao").value = r.observacao_solucao || "";
     $("rPrio").value = r.prioridade || "Normal";
     $("rPrazo").value = r.prazo || "";
     $("formRep").querySelector('[type="submit"]').textContent = "Salvar alterações";
+    $("repCancelar").hidden = false;
     $("rDesc").focus();
   } else if (b.dataset.concluir) {
     const { error } = await sb.from("reparos").update({ concluido: true, concluido_em: new Date().toISOString() }).eq("id", Number(b.dataset.concluir));
@@ -1266,6 +1285,7 @@ $("repLista").addEventListener("click", async e => {
   } else if (b.dataset.apagar && confirm(`Excluir este reparo?\n\n${repRows.find(x => x.id === Number(b.dataset.apagar))?.descricao || ""}\n\nEssa ação não pode ser desfeita.`)) {
     const { error } = await sb.from("reparos").delete().eq("id", Number(b.dataset.apagar));
     if (error) return aviso(msgErro(error), true);
+    if (repEdit === Number(b.dataset.apagar)) cancelarEdicaoReparo();
     await recarregarReparos();
   }
 });
