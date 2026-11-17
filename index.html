@@ -162,11 +162,11 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
           <option>FUMREPOM</option>
           <option>Convênio Rádio Patrulha</option>
           <option>Recursos Próprios</option>
-          <option>Outros</option>
+          <option>Personalizado...</option>
         </select>
         <div id="boxFonteOutro" hidden>
           <label for="hFonteOutro">Qual a fonte do recurso?</label>
-          <input id="hFonteOutro" maxlength="100" placeholder="Ex.: Doação da Empresa XPTO">
+          <input id="hFonteOutro" maxlength="100" placeholder="Ex.: Doação da Empresa XPTO, Patrocínio da Empresa ABC, Emenda Parlamentar, etc.">
         </div>
       </div>
     </div>
@@ -723,16 +723,19 @@ async function listarHist() {
 }
 
 $("hFonte").addEventListener("change", () => {
-  const outro = $("hFonte").value === "Outros";
+  const outro = $("hFonte").value === "Personalizado...";
   $("boxFonteOutro").hidden = !outro;
   if (!outro) $("hFonteOutro").value = "";
 });
 
 $("formHist").addEventListener("submit", async e => {
   e.preventDefault();
+  if ($("hFonte").value === "Personalizado..." && !$("hFonteOutro").value.trim()) {
+    return aviso("Informe a origem do recurso.", true);
+  }
   const reg = { viatura_id: histId, data: $("hData").value, km: Number($("hKm").value.replace(/\D/g, "")), descricao: $("hDesc").value.trim(),
     oficina: $("hOficina").value.trim() || null, valor: $("hValor").value === "" ? null : Number($("hValor").value),
-    fonte_recurso: $("hFonte").value === "Outros"
+    fonte_recurso: $("hFonte").value === "Personalizado..."
       ? $("hFonteOutro").value.trim() || null
       : $("hFonte").value || null };
   if (!histEdit) {
@@ -773,7 +776,7 @@ $("histLista").addEventListener("click", async e => {
     const fonteSalva = r.fonte_recurso ?? "";
     const fontesPadrao = Array.from($("hFonte").options, o => o.value);
     if (fonteSalva && (!fontesPadrao.includes(fonteSalva) || fonteSalva === "Outros")) {
-      $("hFonte").value = "Outros";
+      $("hFonte").value = "Personalizado...";
       $("hFonte").dispatchEvent(new Event("change"));
       $("hFonteOutro").value = fonteSalva;
     } else {
