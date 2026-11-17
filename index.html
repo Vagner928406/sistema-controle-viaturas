@@ -981,10 +981,27 @@ async function gerarCustos() {
     }
     const porV = {}, porM = {}; let total = 0;
     data.forEach(r => {
-      const val = Number(r.valor) || 0; total += val;
-      const o = porV[r.viatura_id] ||= { n: 0, t: 0 }; o.n++; o.t += val;
-      const m = r.data.slice(0, 7); porM[m] = (porM[m] || 0) + val;
+      const val = Number(r.valor) || 0;
+      total += val;
+
+      const o = porV[r.viatura_id] ||= {
+        n: 0,
+        t: 0
+      };
+
+      o.n++;
+      o.t += val;
+
+      const m = r.data.slice(0, 7);
+      porM[m] = (porM[m] || 0) + val;
     });
+    const qtdViaturas =
+      Object.keys(porV).length;
+
+    const mediaViatura =
+      qtdViaturas > 0
+        ? total / qtdViaturas
+        : 0;
     const lv = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).map(([id, x]) => {
       const v = frota.find(f => f.id === Number(id));
       return `<tr><td>${esc(v ? v.prefixo + " / " + v.placa : "Viatura " + id)}</td><td>${x.n}</td><td>${brl(x.t)}</td></tr>`;
@@ -993,7 +1010,16 @@ async function gerarCustos() {
     const barras = (ent, rot) => { const mx = Math.max(...ent.map(e => e[1]), 1); return ent.map(([k, t]) =>
       `<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="width:90px;font-size:12px">${esc(rot(k))}</span><div style="flex:1;background:#e4e8ee;border-radius:4px"><div style="width:${Math.max(t / mx * 100, 1)}%;background:var(--azul2);height:14px;border-radius:4px"></div></div><b style="width:96px;text-align:right;font-size:12px">${brl(t)}</b></div>`).join(""); };
     const topV = Object.entries(porV).sort((a, b) => b[1].t - a[1].t).slice(0, 8).map(([id, x]) => [id, x.t]);
-    $("custosRes").innerHTML = `<p style="font-weight:700">${data.length} serviço(s) · total ${brl(total)}</p>
+    $("custosRes").innerHTML = `<p style="font-weight:700">
+      ${data.length} serviço(s) · total ${brl(total)}
+    </p>
+    <p>
+      Viaturas com manutenção:<br>
+      <b>${qtdViaturas}</b>
+      <br><br>
+      Custo médio por viatura:<br>
+      <b>${brl(mediaViatura)}</b>
+    </p>
       <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
       <h3>Custo por mês</h3>${barras(Object.entries(porM).sort(), k => k.split("-").reverse().join("/"))}<h3>Viaturas com maior custo</h3>${barras(topV, id => { const v = frota.find(f => f.id === Number(id)); return v ? v.prefixo : "Viatura " + id; })}<h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
   } finally { finalizar(); }
