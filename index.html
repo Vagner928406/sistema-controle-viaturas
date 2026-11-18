@@ -582,7 +582,9 @@ $("form").addEventListener("submit", async e => {
     o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
   const original = editando ? frota.find(v => v.id === editando) : null;
-  if (emprestado(original?.status) && o.status === "Disponível") o.devolucao_real = hojeLocalISO();
+  if (emprestado(original?.status) && o.status === "Disponível") {
+    o.devolucao_real = o.devolucao_real || hojeLocalISO();
+  }
   if (emprestado(o.status) && original?.status !== o.status && (!o.resp_emprestimo || !o.destino_emprestimo))
     return aviso(`Informe ${o.status === "Curso/Operação" ? "a guarnição" : "o responsável"} e o destino antes de registrar.`, true);
   const trocaTipo = emprestado(original?.status) && emprestado(o.status) && original.status !== o.status;
@@ -940,7 +942,7 @@ async function aoAlterar(e) {
     if (admin) { abrirForm(original); $("f_status").value = el.value; ajustarRotulosEmp(); }
     return aviso(`Informe ${el.value === "Curso/Operação" ? "a guarnição" : "o responsável"} e o destino para registrar.`, true);
   }
-  if (emprestado(original?.status) && el.value === "Disponível") up.devolucao_real = hojeLocalISO();
+  if (emprestado(original?.status) && el.value === "Disponível") up.devolucao_real = original.devolucao_real || hojeLocalISO();
   if (!emprestado(el.value)) limparEmprestimoAtivo(up);
   else if (!emprestado(original.status)) up.devolucao_real = null;
   const { data, error } = await sb.from("frota").update(up).eq("id", Number(el.dataset.id)).select().single();
