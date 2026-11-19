@@ -329,6 +329,7 @@ const CAMPOS = [
   ["cartao_abastecimento","Cartão de abastecimento","text","Documentos e dados técnicos"],["renavam","Renavam","text"],["chassi","Chassi","text"],
   ["numeracao_pneu","Numeração do pneu","text"],["numero_motor","Número do motor","text"],["patrimonio","Patrimônio","text"],
   ["tipo_aquisicao","Tipo de aquisição","text"],["orgao_repassador","Órgão repassador","text"],["nome_convenio","Nº Convênio","text"],
+  ["possui_termo_cessao","Possui termo de cessão de uso","text"],["venc_termo_cessao","Validade do termo de cessão","date"],
   ["data_aquisicao","Data de aquisição","date"],["valor_aquisicao","Valor de aquisição (R$)","number"],["combustivel","Combustível","text"]
 ];
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
@@ -498,7 +499,9 @@ function montarCampos() {
   CAMPOS.forEach(([c, rot, tipo, grupo]) => {
     if (grupo) html += `<h3${c === "resp_emprestimo" ? ' id="tituloEmp"' : ""}>${grupo}</h3>`;
     const decimal = DECIMAIS.includes(c);
-    const ctl = tipo === "select"
+    const ctl = c === "possui_termo_cessao"
+      ? `<select id="f_${c}"><option value="false">Não</option><option value="true">Sim</option></select>`
+      : tipo === "select"
       ? `<select id="f_${c}" required>${STATUS.map(s => `<option>${s}</option>`).join("")}</select>`
       : c === "resp_emprestimo"
         ? `<textarea id="f_${c}" rows="2" maxlength="500" placeholder="Um policial por linha (só na Guarnição)"></textarea>`
@@ -579,7 +582,9 @@ $("form").addEventListener("submit", async e => {
     let val = $("f_" + c).value.trim();
     if (tipo === "number" && !DECIMAIS.includes(c)) val = val.replace(/\D/g, "");
     if (MAIUSC.includes(c)) val = val.toLocaleUpperCase("pt-BR");
-    o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
+    o[c] = c === "possui_termo_cessao"
+      ? val === "true"
+      : val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
   const original = editando ? frota.find(v => v.id === editando) : null;
   if (emprestado(original?.status) && o.status === "Disponível") {
@@ -968,6 +973,8 @@ const TECNICOS = [
   ["tipo_aquisicao","Tipo de aquisição","text"],
   ["orgao_repassador","Órgão repassador","text"],
   ["nome_convenio","Nº Convênio","text"],
+  ["possui_termo_cessao","Possui termo de cessão de uso","text"],
+  ["venc_termo_cessao","Validade do termo de cessão","date"],
   ["data_aquisicao","Data de aquisição","date"],
   ["valor_aquisicao","Valor de aquisição (R$)","number"],
   ["combustivel","Combustível","text"]
@@ -979,6 +986,11 @@ function abrirDados(v) {
   $("dadosTitulo").textContent = `Dados técnicos — ${v.prefixo} / ${v.placa}`;
   TECNICOS.forEach(([c]) => {
     const el = $("d_" + c);
+    if (c === "possui_termo_cessao") {
+      el.value = String(v[c] ?? false);
+      el.disabled = !admin;
+      return;
+    }
     el.value = DECIMAIS.includes(c) && v[c] != null
       ? Number(v[c]).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : v[c] ?? "";
@@ -994,6 +1006,10 @@ $("formDados").addEventListener("submit", async e => {
   const o = {};
   for (const [c, , tipo] of TECNICOS) {
     let val = $("d_" + c).value.trim();
+    if (c === "possui_termo_cessao") {
+      o[c] = $("d_" + c).value === "true";
+      continue;
+    }
     if (DECIMAIS.includes(c)) {
       if (val === "") { o[c] = null; continue; }
       val = val.replace(/R\$/i, "").replace(/\s/g, "");
@@ -1535,6 +1551,9 @@ document.querySelectorAll("th.ord").forEach(t => {
   t.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.click(); } });
 });
 $("camposDados").innerHTML = TECNICOS.map(([c, rot, tipo]) => {
+  if (c === "possui_termo_cessao") {
+    return `<div><label for="d_${c}">${rot}</label><select id="d_${c}"><option value="false">Não</option><option value="true">Sim</option></select></div>`;
+  }
   const inputType = tipo === "date" ? "date" : DECIMAIS.includes(c) ? "text" : tipo === "number" ? "number" : "text";
   const atributos = DECIMAIS.includes(c) ? 'inputmode="decimal"'
     : tipo === "number" ? 'min="0" step="1" inputmode="numeric"' : "";
