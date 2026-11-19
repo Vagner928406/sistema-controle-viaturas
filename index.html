@@ -89,7 +89,8 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 .assinatura{text-align:center;padding:16px 12px 20px;color:#5b6877;font-size:13px}
 @media(max-width:600px){main{padding:12px}header h1{font-size:16px}}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<!-- Dica de segurança: em produção, adicione o atributo integrity="sha384-..." correspondente a esta versão do bundle -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -263,6 +264,20 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <input type="search" id="kmBusca" placeholder="Buscar prefixo, placa ou modelo" aria-label="Buscar viatura" style="margin-top:10px">
   <div id="kmLista" style="max-height:65vh;overflow:auto;margin-top:8px"></div>
 </dialog>
+
+<dialog id="dlgExcluir" style="width:min(460px,calc(100% - 24px))">
+  <form id="formExcluir">
+    <div class="cab"><h2>Excluir viatura</h2><button type="button" class="sec" data-fechar>Fechar</button></div>
+    <p id="excluirMsg" style="white-space:pre-line"></p>
+    <label for="excluirPrefixo">Para confirmar a exclusão, digite o prefixo da viatura (<b id="excluirPrefAlvo"></b>):</label>
+    <input id="excluirPrefixo" autocomplete="off" style="text-transform:uppercase" required>
+    <div class="rodape">
+      <button type="submit" class="perigo">Excluir definitivamente</button>
+      <button type="button" class="sec" data-fechar>Cancelar</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlgSenha">
   <h2>Definir nova senha</h2>
   <form id="formSenha">
@@ -332,12 +347,14 @@ const CAMPOS = [
   ["possui_termo_cessao","Possui termo de cessão de uso","text"],["venc_termo_cessao","Validade do termo de cessão","date"],
   ["data_aquisicao","Data de aquisição","date"],["valor_aquisicao","Valor de aquisição (R$)","number"],["combustivel","Combustível","text"]
 ];
+const TECNICOS = CAMPOS.slice(-14);
 const MAIUSC = ["prefixo","placa","marca","modelo","emprego","chassi"];
 const DECIMAIS = ["valor_aquisicao"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Curso/Operação","Baixada"];
 const emprestado = st => st === "Emprestada" || st === "Curso/Operação";
 const rotResp = st => st === "Curso/Operação" ? "Guarnição" : "Responsável";
-const linhasTxt = t => esc(t).replace(/\r?\n/g, "<br>");
+const linhasTxt = t => esc(t).replace(/?
+/g, "<br>");
 const limparEmprestimoAtivo = o => Object.assign(o, {
   resp_emprestimo: null,
   destino_emprestimo: null,
@@ -350,8 +367,18 @@ let admin = false, podeKm = false, frota = [], reparos = [], editando = null, hi
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtKm = v => v == null ? "-" : Number(v).toLocaleString("pt-BR");
 const fmtData = d => d ? d.split("-").reverse().join("/") : "-";
+const brl = x => Number(x).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtDecimal = v => v == null ? "" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hojeLocalISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+function parseDecimal(val) {
+  const limpo = String(val ?? "").trim().replace(/R\$/i, "").replace(/\s/g, "");
+  if (limpo === "") return { ok: true, valor: null };
+  const numero = Number(limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".") : limpo);
+  if (!Number.isFinite(numero) || numero < 0) return { ok: false, valor: null };
+  return { ok: true, valor: numero };
+}
 
 if (!$("aviso").showPopover) $("aviso").hidden = true; // navegador sem popover: a caixa começa escondida
 function aviso(msg, erro) {
@@ -393,8 +420,7 @@ function alertas(v) {
   if (v.status === "Baixada") return [];
   const a = [];
   if (v.troca_oleo) {
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const d = Math.round((new Date(v.troca_oleo + "T00:00:00") - hoje) / 864e5);
+    const d = dias(v.troca_oleo);
     if (d < 0) a.push(["v", `Óleo vencido há ${-d} dia(s)`]);
     else if (d <= LIMITE_DIAS) a.push(["p", d === 0 ? "Óleo vence hoje" : `Óleo em ${d} dia(s)`]);
   }
@@ -511,7 +537,7 @@ function montarCampos() {
       : c === "resp_emprestimo"
         ? `<textarea id="f_${c}" rows="2" maxlength="500" placeholder="Um policial por linha (só na Guarnição)"></textarea>`
       : decimal
-        ? `<input id="f_${c}" type="number" min="0" step="0.01">`
+        ? `<input id="f_${c}" type="text" inputmode="decimal">`
       : `<input id="f_${c}" type="${tipo === "number" ? "text" : tipo}" ${tipo === "number" ? 'inputmode="numeric" class="milhar"' : ""} ${tipo === "number" ? 'min="0"' : tipo === "date" && c !== "data_aquisicao" ? 'min="2000-01-01" max="2100-12-31"' : ""} ${["prefixo","placa","marca","modelo","ano","km"].includes(c) ? "required" : ""} ${MAIUSC.includes(c) ? 'style="text-transform:uppercase"' : ""} ${c === "emprego" ? 'list="listaEmpregos"' : ""}>`;
     html += `<div><label for="f_${c}">${rot}</label>${ctl}</div>`;
   });
@@ -532,7 +558,18 @@ function ajustarRotulosEmp() {
 function abrirForm(v) {
   editando = v ? v.id : null;
   $("formTitulo").textContent = v ? `${admin ? "Editar" : "Detalhes de"} ${v.prefixo} / ${v.placa}` : "Nova viatura";
-  CAMPOS.forEach(([c]) => { const el = $("f_" + c); el.value = v?.[c] ?? (c === "status" ? "Disponível" : c === "km" ? 0 : ""); if (el.classList.contains("milhar") && el.value !== "") el.value = Number(el.value).toLocaleString("pt-BR"); el.disabled = !admin; });
+  CAMPOS.forEach(([c]) => {
+    const el = $("f_" + c);
+    if (c === "possui_termo_cessao") {
+      el.value = String(v?.[c] ?? false);
+    } else if (DECIMAIS.includes(c)) {
+      el.value = fmtDecimal(v?.[c]);
+    } else {
+      el.value = v?.[c] ?? (c === "status" ? "Disponível" : c === "km" ? 0 : "");
+      if (el.classList.contains("milhar") && el.value !== "") el.value = Number(el.value).toLocaleString("pt-BR");
+    }
+    el.disabled = !admin;
+  });
   $("formRodape").children[0].hidden = !admin;
   ajustarRotulosEmp();
   ajustarValidadeTermo("f");
@@ -549,25 +586,16 @@ async function registrarDevolucaoEmprestimo(v, contexto) {
 }
 
 async function registrarNovoEmprestimo(v, contexto) {
-  const { data: aberto, error: erroBusca } = await sb.from("emprestimos")
+  const { data: abertos, error: erroBusca } = await sb.from("emprestimos")
     .select("id")
     .eq("viatura_id", v.id)
     .is("data_retorno", null)
-    .maybeSingle();
+    .limit(1);
   if (erroBusca) {
-    console.error("ERRO AO VERIFICAR EMPRÉSTIMO ABERTO");
-    console.error(erroBusca);
     aviso(contexto + msgErro(erroBusca), true);
     return false;
   }
-  if (aberto) {
-    console.log("Empréstimo aberto já registrado:", aberto.id);
-    return true;
-  }
-  console.log("novoEmprestimo =", true);
-  console.log("data.id =", v.id);
-  console.log("responsavel =", v.resp_emprestimo);
-  console.log("destino =", v.destino_emprestimo);
+  if (abertos?.length) return true;
   const { error } = await sb.from("emprestimos").insert({
     viatura_id: v.id,
     responsavel: v.resp_emprestimo,
@@ -577,8 +605,6 @@ async function registrarNovoEmprestimo(v, contexto) {
     ...(v.status === "Curso/Operação" ? { tipo: "Curso/Operação" } : {})
   });
   if (error) {
-    console.error("ERRO EMPRÉSTIMO");
-    console.error(error);
     aviso(contexto + msgErro(error), true);
     return false;
   }
@@ -591,11 +617,19 @@ $("form").addEventListener("submit", async e => {
   const o = {};
   for (const [c, , tipo] of CAMPOS) {
     let val = $("f_" + c).value.trim();
-    if (tipo === "number" && !DECIMAIS.includes(c)) val = val.replace(/\D/g, "");
+    if (c === "possui_termo_cessao") {
+      o[c] = val === "true";
+      continue;
+    }
+    if (DECIMAIS.includes(c)) {
+      const dec = parseDecimal(val);
+      if (!dec.ok) return aviso("Informe um valor de aquisição válido.", true);
+      o[c] = dec.valor;
+      continue;
+    }
+    if (tipo === "number") val = val.replace(/\D/g, "");
     if (MAIUSC.includes(c)) val = val.toLocaleUpperCase("pt-BR");
-    o[c] = c === "possui_termo_cessao"
-      ? val === "true"
-      : val === "" ? null : (tipo === "number" ? Number(val) : val);
+    o[c] = val === "" ? null : (tipo === "number" ? Number(val) : val);
   }
   const original = editando ? frota.find(v => v.id === editando) : null;
   if (emprestado(original?.status) && o.status === "Disponível") {
@@ -635,36 +669,61 @@ $("form").addEventListener("submit", async e => {
   aviso("Viatura salva.");
 });
 
+let excluindoViatura = null;
 async function excluir(v) {
   if (!admin) return aviso("Apenas administradores podem excluir.", true);
   const cont = t => sb.from(t).select("id", { count: "exact", head: true }).eq("viatura_id", v.id);
   const [m, r, emp] = await Promise.all([cont("manutencoes"), cont("reparos"), cont("emprestimos")]);
   const qm = m.count ?? 0, qr = r.count ?? 0, qe = emp.count ?? 0;
   const msg = (m.error || r.error || emp.error)
-    ? `Não foi possível conferir todo o histórico da viatura ${v.prefixo} / ${v.placa}. Ela pode ter manutenções, reparos e empréstimos que serão apagados junto.\n\nDeseja continuar?`
+    ? `Não foi possível conferir todo o histórico da viatura ${v.prefixo} / ${v.placa}. Ela pode ter manutenções, reparos e empréstimos que serão apagados junto.
+
+Essa ação não pode ser desfeita.`
     : qm + qr + qe > 0
-      ? `ATENÇÃO: a viatura ${v.prefixo} / ${v.placa} tem ${qm} manutenção(ões), ${qr} reparo(s) e ${qe} empréstimo(s) registrados.\n\nExcluir apaga a viatura e todo esse histórico, permanentemente.\n\nDeseja continuar?`
-      : `Excluir a viatura ${v.prefixo} / ${v.placa}?\n\nEssa ação não pode ser desfeita.`;
-  if (!confirm(msg)) return;
-  const digitado = prompt(`Para confirmar a exclusão, digite o prefixo da viatura: ${v.prefixo}`);
-  if (digitado === null) return;
-  if (digitado.trim().toUpperCase() !== String(v.prefixo).toUpperCase()) return aviso("Exclusão cancelada: o prefixo digitado não confere.", true);
-  const { error } = await sb.from("frota").delete().eq("id", v.id);
-  if (error) return aviso(msgErro(error), true);
-  frota = frota.filter(x => x.id !== v.id); reparos = reparos.filter(x => x.viatura_id !== v.id); render();
-  // apaga também os arquivos anexados, que ficariam sem dono no armazenamento
-  const pasta = `viatura_${v.id}`;
-  for (let tent = 0; tent < 20; tent++) {
-    const { data: arq, error: errL } = await sb.storage.from(BUCKET).list(pasta, { limit: 100 });
-    if (errL) return aviso("Viatura excluída, mas não foi possível listar os arquivos anexados: " + msgErro(errL), true);
-    const nomes = (arq || []).map(f => `${pasta}/${f.name}`);
-    if (!nomes.length) break;
-    const rm = await sb.storage.from(BUCKET).remove(nomes);
-    if (rm.error) return aviso("Viatura excluída, mas não foi possível apagar os arquivos anexados: " + msgErro(rm.error), true);
-    if (nomes.length < 100) break;
-  }
-  aviso("Viatura excluída.");
+      ? `ATENÇÃO: a viatura ${v.prefixo} / ${v.placa} tem ${qm} manutenção(ões), ${qr} reparo(s) e ${qe} empréstimo(s) registrados.
+
+Excluir apaga a viatura e todo esse histórico permanentemente.`
+      : `Excluir a viatura ${v.prefixo} / ${v.placa}?
+
+Essa ação não pode ser desfeita.`;
+  excluindoViatura = v;
+  $("excluirMsg").textContent = msg;
+  $("excluirPrefAlvo").textContent = v.prefixo;
+  $("excluirPrefixo").value = "";
+  $("dlgExcluir").showModal();
+  $("excluirPrefixo").focus();
 }
+
+$("formExcluir").addEventListener("submit", async e => {
+  e.preventDefault();
+  const v = excluindoViatura;
+  if (!v || !admin) return;
+  if ($("excluirPrefixo").value.trim().toUpperCase() !== String(v.prefixo).toUpperCase()) {
+    return aviso("Exclusão cancelada: o prefixo digitado não confere.", true);
+  }
+  $("dlgExcluir").close();
+  excluindoViatura = null;
+  const finalizar = mostrarCarregamento("Excluindo viatura...");
+  try {
+    const { error } = await sb.from("frota").delete().eq("id", v.id);
+    if (error) return aviso(msgErro(error), true);
+    frota = frota.filter(x => x.id !== v.id);
+    reparos = reparos.filter(x => x.viatura_id !== v.id);
+    render();
+    // apaga também os arquivos anexados, que ficariam sem dono no armazenamento
+    const pasta = `viatura_${v.id}`;
+    for (let tent = 0; tent < 20; tent++) {
+      const { data: arq, error: errL } = await sb.storage.from(BUCKET).list(pasta, { limit: 100 });
+      if (errL) return aviso("Viatura excluída, mas não foi possível listar os arquivos anexados: " + msgErro(errL), true);
+      const nomes = (arq || []).map(f => `${pasta}/${f.name}`);
+      if (!nomes.length) break;
+      const rm = await sb.storage.from(BUCKET).remove(nomes);
+      if (rm.error) return aviso("Viatura excluída, mas não foi possível apagar os arquivos anexados: " + msgErro(rm.error), true);
+      if (nomes.length < 100) break;
+    }
+    aviso("Viatura excluída.");
+  } finally { finalizar(); }
+});
 
 // ---------- Histórico de manutenção ----------
 async function abrirHist(v) {
@@ -737,7 +796,7 @@ function marcarPorDescricao() {
   marcar("oleo", /[oó]leo/.test(t));
   marcar("filtro_oleo", /filtro.*[oó]leo|[oó]leo.*filtro/.test(t));
   marcar("filtro_comb", /combust/.test(t));
-  marcar("filtro_ar", /filtro.*\bar\b|\bar\b.*filtro/.test(t));
+  marcar("filtro_ar", /filtro.*ar|ar.*filtro/.test(t));
 }
 
 async function listarHist() {
@@ -747,10 +806,10 @@ async function listarHist() {
     if (error) { $("histLista").innerHTML = ""; return aviso(msgErro(error), true); }
     histRows = data;
     const total = data.reduce((s, r) => s + (Number(r.valor) || 0), 0);
-    $("histTotal").textContent = data.length ? `${data.length} registro(s) · custo total ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : "";
+    $("histTotal").textContent = data.length ? `${data.length} registro(s) · custo total ${brl(total)}` : "";
     $("histLista").innerHTML = data.length ? `<table><thead><tr><th>Data</th><th>KM</th><th>Serviço</th><th>Oficina</th><th>Fonte</th><th>Valor</th>${admin ? "<th></th>" : ""}</tr></thead><tbody>${data.map(r =>
       `<tr><td>${fmtData(r.data)}</td><td>${fmtKm(r.km)}</td><td>${esc(r.descricao)}</td><td>${esc(r.oficina) || "-"}</td><td>${esc(r.fonte_recurso) || "-"}</td>
-       <td>${r.valor != null ? Number(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}</td>
+       <td>${r.valor != null ? brl(r.valor) : "-"}</td>
        ${admin ? `<td class="acoes"><button class="sec" data-edit="${r.id}">Editar</button> <button class="perigo" data-del="${r.id}">Excluir</button></td>` : ""}</tr>`).join("")}</tbody></table>`
       : "<p>Nenhuma manutenção registrada.</p>";
   } finally { finalizar(); }
@@ -824,7 +883,11 @@ $("histLista").addEventListener("click", async e => {
   }
   const id = e.target.dataset.del; if (!id) return;
   const reg = histRows.find(x => x.id === Number(id));
-  if (!confirm(`Excluir esta manutenção?\n\n${reg ? fmtData(reg.data) + " - " + reg.descricao : ""}\n\nEssa ação não pode ser desfeita.`)) return;
+  if (!confirm(`Excluir esta manutenção?
+
+${reg ? fmtData(reg.data) + " - " + reg.descricao : ""}
+
+Essa ação não pode ser desfeita.`)) return;
   const { error } = await sb.from("manutencoes").delete().eq("id", id);
   if (error) return aviso(msgErro(error), true);
   if (Number(id) === histEdit) sairEdicaoHist();
@@ -835,10 +898,14 @@ $("histLista").addEventListener("click", async e => {
 $("btnCsv").onclick = () => {
   const cols = CAMPOS.map(c => c[0]), cab = CAMPOS.map(c => c[1]);
   const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = "\uFEFF" + [cab, ...filtradas().map(v => cols.map(c => v[c]))].map(l => l.map(cel).join(";")).join("\r\n");
+  const fmtVal = (v, c) => typeof v[c] === "boolean" ? (v[c] ? "Sim" : "Não")
+    : DECIMAIS.includes(c) && v[c] != null ? String(v[c]).replace(".", ",")
+    : v[c];
+  const csv = "﻿" + [cab, ...filtradas().map(v => cols.map(c => fmtVal(v, c)))].map(l => l.map(cel).join(";")).join("
+");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  a.download = `viaturas-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  a.download = `viaturas-${hojeLocalISO()}.csv`; a.click(); URL.revokeObjectURL(a.href);
 };
 
 // ---------- Eventos da tela ----------
@@ -899,7 +966,11 @@ $("empRes").addEventListener("click", async e => {
   if (b.hasAttribute("data-emp-cancelar")) { empEditId = null; return renderEmp(); }
   if (b.dataset.empDel) {
     const reg = empRows.find(x => String(x.id) === b.dataset.empDel);
-    if (!confirm(`Excluir este empréstimo?\n\n${reg ? (reg.destino || "-") + " - " + (reg.responsavel || "-") + " (" + fmtData(reg.data_saida) + ")" : ""}\n\nEssa ação não pode ser desfeita.`)) return;
+    if (!confirm(`Excluir este empréstimo?
+
+${reg ? (reg.destino || "-") + " - " + (reg.responsavel || "-") + " (" + fmtData(reg.data_saida) + ")" : ""}
+
+Essa ação não pode ser desfeita.`)) return;
     const { data, error } = await sb.from("emprestimos").delete().eq("id", b.dataset.empDel).select();
     if (error) return aviso(msgErro(error), true);
     if (!data || !data.length) return aviso("Não foi possível excluir: sem permissão no banco (veja a política de exclusão da tabela emprestimos).", true);
@@ -973,23 +1044,8 @@ async function aoAlterar(e) {
 }
 $("lista").addEventListener("change", aoAlterar);
 $("kmLista").addEventListener("change", aoAlterar);
+
 // ---------- Dados técnicos ----------
-const TECNICOS = [
-  ["cartao_abastecimento","Cartão de abastecimento","text"],
-  ["renavam","Renavam","text"],
-  ["chassi","Chassi","text"],
-  ["numeracao_pneu","Numeração do pneu","text"],
-  ["numero_motor","Número do motor","text"],
-  ["patrimonio","Patrimônio","text"],
-  ["tipo_aquisicao","Tipo de aquisição","text"],
-  ["orgao_repassador","Órgão repassador","text"],
-  ["nome_convenio","Nº Convênio","text"],
-  ["possui_termo_cessao","Possui termo de cessão de uso","text"],
-  ["venc_termo_cessao","Validade do termo de cessão","date"],
-  ["data_aquisicao","Data de aquisição","date"],
-  ["valor_aquisicao","Valor de aquisição (R$)","number"],
-  ["combustivel","Combustível","text"]
-];
 let dadosId = null;
 
 function abrirDados(v) {
@@ -1002,9 +1058,7 @@ function abrirDados(v) {
       el.disabled = !admin;
       return;
     }
-    el.value = DECIMAIS.includes(c) && v[c] != null
-      ? Number(v[c]).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : v[c] ?? "";
+    el.value = DECIMAIS.includes(c) ? fmtDecimal(v[c]) : (v[c] ?? "");
     el.disabled = !admin;
   });
   ajustarValidadeTermo("d");
@@ -1023,11 +1077,9 @@ $("formDados").addEventListener("submit", async e => {
       continue;
     }
     if (DECIMAIS.includes(c)) {
-      if (val === "") { o[c] = null; continue; }
-      val = val.replace(/R\$/i, "").replace(/\s/g, "");
-      const numero = Number(val.includes(",") ? val.replace(/\./g, "").replace(",", ".") : val);
-      if (!Number.isFinite(numero) || numero < 0) return aviso("Informe um valor de aquisição válido.", true);
-      o[c] = numero;
+      const dec = parseDecimal(val);
+      if (!dec.ok) return aviso("Informe um valor de aquisição válido.", true);
+      o[c] = dec.valor;
       continue;
     }
     if (c === "chassi") val = val.toLocaleUpperCase("pt-BR");
@@ -1047,9 +1099,8 @@ document.querySelector("thead").addEventListener("click", e => {
 });
 
 // ---------- Custos ----------
-const brl = x => Number(x).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 async function abrirCustos() {
-  $("cDe").value = `${new Date().getFullYear()}-01-01`; $("cAte").value = new Date().toISOString().slice(0, 10);
+  $("cDe").value = `${new Date().getFullYear()}-01-01`; $("cAte").value = hojeLocalISO();
   $("dlgCustos").showModal(); await gerarCustos();
 }
 async function gerarCustos() {
@@ -1135,8 +1186,9 @@ $("cGerar").onclick = gerarCustos;
 async function imprimirFicha() {
   const v = frota.find(x => x.id === dadosId); if (!v) return;
   const { data } = await sb.from("manutencoes").select("*").eq("viatura_id", v.id).order("data", { ascending: false });
-  const val = (c, t) => t === "date" ? fmtData(v[c])
-    : DECIMAIS.includes(c) && v[c] != null ? Number(v[c]).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+  const val = (c, t) => typeof v[c] === "boolean" ? (v[c] ? "Sim" : "Não")
+    : t === "date" ? fmtData(v[c])
+    : DECIMAIS.includes(c) && v[c] != null ? brl(v[c])
     : (v[c] ?? "-");
   $("ficha").innerHTML = `<h1 style="margin:0">Ficha da viatura ${esc(v.prefixo)} / ${esc(v.placa)}</h1><p>Emitida em ${new Date().toLocaleDateString("pt-BR")}</p>
     <table class="fx">${CAMPOS.map(([c, rot, t]) => `<tr><th>${rot}</th><td>${esc(val(c, t))}</td></tr>`).join("")}</table>
@@ -1168,9 +1220,18 @@ $("btnRel").onclick = () => {
 };
 async function dadosRelatorio() {
   const de = $("rDe").value, ate = $("rAte").value, vid = $("rViat").value;
-  const rows = (await todos("manutencoes"))
-    .filter(r => (!vid || String(r.viatura_id) === vid) && (!de || r.data >= de) && (!ate || r.data <= ate))
-    .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  let rows = [], offset = 0;
+  for (;;) {
+    let q = sb.from("manutencoes").select("*").order("data", { ascending: false }).order("id", { ascending: false }).range(offset, offset + 999);
+    if (vid) q = q.eq("viatura_id", Number(vid));
+    if (de) q = q.gte("data", de);
+    if (ate) q = q.lte("data", ate);
+    const { data, error } = await q;
+    if (error) throw error;
+    rows = rows.concat(data);
+    if (data.length < 1000) break;
+    offset += 1000;
+  }
   const por = new Map();
   rows.forEach(r => { if (!por.has(r.viatura_id)) por.set(r.viatura_id, []); por.get(r.viatura_id).push(r); });
   const soma = regs => regs.reduce((t, r) => t + (Number(r.valor) || 0), 0);
@@ -1213,7 +1274,8 @@ $("rCsv").onclick = async () => {
     const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const linhas = [["Viatura", "Placa", "Veículo", "Data", "KM", "Serviço", "Oficina", "Valor"]];
     r.grupos.forEach(g => g.regs.forEach(x => linhas.push([g.v.prefixo, g.v.placa, `${g.v.marca ?? ""} ${g.v.modelo ?? ""}`.trim(), fmtData(x.data), x.km, x.descricao, x.oficina, x.valor == null ? "" : String(x.valor).replace(".", ",")])));
-    const csv = "\uFEFF" + linhas.map(l => l.map(cel).join(";")).join("\r\n");
+    const csv = "﻿" + linhas.map(l => l.map(cel).join(";")).join("
+");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const nome = r.vid ? r.grupos[0].v.prefixo : "geral";
@@ -1247,7 +1309,7 @@ $("btnBackup").onclick = async () => {
     try { pf = await todos("usuarios_perfis"); } catch {}
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), frota: fr, manutencoes: m, reparos: rp, emprestimos: emp, perfis: pf, anexos_nomes: anexos }, null, 1)], { type: "application/json" }));
-    a.download = `backup-viaturas-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
+    a.download = `backup-viaturas-${hojeLocalISO()}.json`; a.click(); URL.revokeObjectURL(a.href);
   } finally { finalizar(); }
 };
 
@@ -1265,7 +1327,7 @@ $("docArq").addEventListener("change", async e => {
   let falhou = false;
   for (const f of e.target.files) {
     if (f.size > 10 * 1024 * 1024) { aviso(`${f.name}: maior que 10 MB.`, true); falhou = true; continue; }
-    const nome = f.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "_");
+    const nome = f.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w.-]+/g, "_");
     const { error } = await sb.storage.from(BUCKET).upload(`viatura_${dadosId}/${Date.now()}_${nome}`, f);
     if (error) { aviso(msgErro(error), true); falhou = true; break; }
   }
@@ -1279,7 +1341,11 @@ $("docsLista").addEventListener("click", async e => {
     const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(`viatura_${dadosId}/${b.dataset.abrir}`, 300);
     if (error || !data?.signedUrl) { w?.close(); return aviso(msgErro(error || "Não foi possível abrir o arquivo."), true); }
     if (w) w.location.href = data.signedUrl; else aviso("O navegador bloqueou a janela. Permita pop-ups e tente de novo.", true);
-  } else if (b.dataset.apagar && confirm(`Excluir este arquivo?\n\n${b.dataset.apagar.replace(/^\d+_/, "")}\n\nEssa ação não pode ser desfeita.`)) {
+  } else if (b.dataset.apagar && confirm(`Excluir este arquivo?
+
+${b.dataset.apagar.replace(/^\d+_/, "")}
+
+Essa ação não pode ser desfeita.`)) {
     const { error } = await sb.storage.from(BUCKET).remove([`viatura_${dadosId}/${b.dataset.apagar}`]);
     if (error) return aviso(msgErro(error), true);
     await listarDocs();
@@ -1288,37 +1354,43 @@ $("docsLista").addEventListener("click", async e => {
 
 // ---------- Histórico de alterações ----------
 async function abrirLog() {
-  $("dlgLog").showModal(); $("logRes").textContent = "Carregando...";
-  const { data, error } = await sb.from("log_alteracoes").select("*").order("id", { ascending: false }).limit(200);
-  if (error) { $("logRes").textContent = ""; return aviso(msgErro(error), true); }
-  const ROT = { concluido: "Concluído", concluido_em: "Concluído em", prioridade: "Prioridade", prazo: "Prazo", descricao: "Descrição", ...Object.fromEntries(CAMPOS.map(([c, r]) => [c, r])) };
-  const fv = x => x == null || x === "" ? "vazio" : String(x);
-  const linhas = data.map(l => {
-    const a = l.antes || {}, d = l.depois || {}, base = l.depois || l.antes || {};
-    let item, mud;
-    if (l.tabela === "frota") item = `${base.prefixo || ""} / ${base.placa || ""}`;
-    else { const v = frota.find(f => f.id === base.viatura_id); item = `${l.tabela === "reparos" ? "Reparo" : "Manutenção"} · ${v ? v.prefixo : "viatura " + base.viatura_id}`; }
-    if (l.acao === "INSERT") mud = l.tabela === "frota" ? "Cadastrada" : "Registrada: " + esc(base.descricao || "");
-    else if (l.acao === "DELETE") mud = "Excluído" + (l.tabela === "manutencoes" ? ": " + esc(base.descricao || "") : "");
-    else mud = Object.keys(d).filter(k => k !== "criado_em" && JSON.stringify(a[k]) !== JSON.stringify(d[k]))
-      .map(k => `${esc(ROT[k] || k)}: ${esc(fv(a[k]))} → ${esc(fv(d[k]))}`).join("<br>") || "-";
-    return `<tr><td>${new Date(l.criado_em).toLocaleString("pt-BR")}</td><td>${esc(l.usuario_email || "-")}</td><td>${esc(item)}</td><td>${mud}</td></tr>`;
-  });
-  $("logRes").innerHTML = linhas.length
-    ? `<table style="min-width:640px"><thead><tr><th>Quando</th><th>Quem</th><th>Item</th><th>O que mudou</th></tr></thead><tbody>${linhas.join("")}</tbody></table>`
-    : "<p>Nenhuma alteração registrada ainda.</p>";
+  $("dlgLog").showModal(); $("logRes").innerHTML = "";
+  const finalizar = mostrarCarregamento("Carregando histórico de alterações...");
+  try {
+    const { data, error } = await sb.from("log_alteracoes").select("*").order("id", { ascending: false }).limit(200);
+    if (error) return aviso(msgErro(error), true);
+    const ROT = { concluido: "Concluído", concluido_em: "Concluído em", prioridade: "Prioridade", prazo: "Prazo", descricao: "Descrição", ...Object.fromEntries(CAMPOS.map(([c, r]) => [c, r])) };
+    const fv = x => x == null || x === "" ? "vazio" : String(x);
+    const linhas = data.map(l => {
+      const a = l.antes || {}, d = l.depois || {}, base = l.depois || l.antes || {};
+      let item, mud;
+      if (l.tabela === "frota") item = `${base.prefixo || ""} / ${base.placa || ""}`;
+      else { const v = frota.find(f => f.id === base.viatura_id); item = `${l.tabela === "reparos" ? "Reparo" : "Manutenção"} · ${v ? v.prefixo : "viatura " + base.viatura_id}`; }
+      if (l.acao === "INSERT") mud = l.tabela === "frota" ? "Cadastrada" : "Registrada: " + esc(base.descricao || "");
+      else if (l.acao === "DELETE") mud = "Excluído" + (l.tabela === "manutencoes" ? ": " + esc(base.descricao || "") : "");
+      else mud = Object.keys(d).filter(k => k !== "criado_em" && JSON.stringify(a[k]) !== JSON.stringify(d[k]))
+        .map(k => `${esc(ROT[k] || k)}: ${esc(fv(a[k]))} → ${esc(fv(d[k]))}`).join("<br>") || "-";
+      return `<tr><td>${new Date(l.criado_em).toLocaleString("pt-BR")}</td><td>${esc(l.usuario_email || "-")}</td><td>${esc(item)}</td><td>${mud}</td></tr>`;
+    });
+    $("logRes").innerHTML = linhas.length
+      ? `<table style="min-width:640px"><thead><tr><th>Quando</th><th>Quem</th><th>Item</th><th>O que mudou</th></tr></thead><tbody>${linhas.join("")}</tbody></table>`
+      : "<p>Nenhuma alteração registrada ainda.</p>";
+  } finally { finalizar(); }
 }
 $("btnLog").onclick = abrirLog;
 
 // ---------- Usuários e permissões ----------
 async function abrirUsuarios() {
-  $("dlgUsr").showModal(); $("usrRes").textContent = "Carregando...";
-  const { data, error } = await sb.rpc("listar_usuarios");
-  if (error) { $("usrRes").textContent = ""; return aviso(msgErro(error), true); }
-  $("usrRes").innerHTML = `<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u =>
-    `<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString("pt-BR") : "nunca"}</td>
-     <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${u.perfil ? "" : '<option value="" selected disabled>Sem acesso</option>'}${["admin", "operador", "consulta"].map(p =>
-       `<option value="${p}"${p === u.perfil ? " selected" : ""}>${{ admin: "Administrador", operador: "Atualiza KM", consulta: "Consulta" }[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
+  $("dlgUsr").showModal(); $("usrRes").innerHTML = "";
+  const finalizar = mostrarCarregamento("Carregando usuários...");
+  try {
+    const { data, error } = await sb.rpc("listar_usuarios");
+    if (error) return aviso(msgErro(error), true);
+    $("usrRes").innerHTML = `<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u =>
+      `<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString("pt-BR") : "nunca"}</td>
+       <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${u.perfil ? "" : '<option value="" selected disabled>Sem acesso</option>'}${["admin", "operador", "consulta"].map(p =>
+         `<option value="${p}"${p === u.perfil ? " selected" : ""}>${{ admin: "Administrador", operador: "Atualiza KM", consulta: "Consulta" }[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
+  } finally { finalizar(); }
 }
 $("usrRes").addEventListener("change", async e => {
   const el = e.target.closest(".perfsel"); if (!el) return;
@@ -1350,7 +1422,8 @@ async function listarReparos() {
   const dt = x => new Date(x).toLocaleDateString("pt-BR");
   const prazo = r => r.prazo ? `<br><small${dias(r.prazo) < 0 ? ' style="color:var(--verm);font-weight:700"' : ""}>Prazo: ${fmtData(r.prazo)}${dias(r.prazo) < 0 ? " (atrasado)" : ""}</small>` : "";
   const solucao = r => r.observacao_solucao
-    ? `<br><small>Solução:<br>${esc(r.observacao_solucao).replace(/\n/g, "<br>")}</small>` : "";
+    ? `<br><small>Solução:<br>${esc(r.observacao_solucao).replace(/
+/g, "<br>")}</small>` : "";
   $("repLista").innerHTML = (pend.length
     ? `<table style="min-width:0"><tbody>${pend.map(r => `<tr><td>${r.prioridade === "Urgente" ? '<span class="chip v">Urgente</span> ' : ""}${esc(r.descricao)}${prazo(r)}${solucao(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td>
       <td class="acoes">${admin ? `<button class="sec" data-editar="${r.id}">Editar</button> <button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
@@ -1363,7 +1436,7 @@ async function listarReparos() {
     `).join("")}</tbody></table>` : "");
 }
 async function recarregarReparos() {
-  const r = await sb.from("reparos").select("*").eq("concluido", false);
+  const r = await sb.from("reparos").select("*").eq("concluido", false).order("criado_em");
   if (!r.error) reparos = r.data;
   render(); await listarReparos();
 }
@@ -1389,10 +1462,10 @@ $("formRep").addEventListener("submit", async e => {
     ({ error } = await sb.from("reparos").insert(registro));
   }
   if (error) return aviso(msgErro(error), true);
-  const editando = repEdit !== null;
+  const editandoRep = repEdit !== null;
   cancelarEdicaoReparo();
   await recarregarReparos();
-  aviso(editando ? "Reparo atualizado." : "Reparo registrado. A viatura agora tem um alerta.");
+  aviso(editandoRep ? "Reparo atualizado." : "Reparo registrado. A viatura agora tem um alerta.");
 });
 $("repCancelar").onclick = cancelarEdicaoReparo;
 $("repLista").addEventListener("click", async e => {
@@ -1412,7 +1485,11 @@ $("repLista").addEventListener("click", async e => {
     const { error } = await sb.from("reparos").update({ concluido: true, concluido_em: new Date().toISOString() }).eq("id", Number(b.dataset.concluir));
     if (error) return aviso(msgErro(error), true);
     await recarregarReparos(); aviso("Reparo concluído.");
-  } else if (b.dataset.apagar && confirm(`Excluir este reparo?\n\n${repRows.find(x => x.id === Number(b.dataset.apagar))?.descricao || ""}\n\nEssa ação não pode ser desfeita.`)) {
+  } else if (b.dataset.apagar && confirm(`Excluir este reparo?
+
+${repRows.find(x => x.id === Number(b.dataset.apagar))?.descricao || ""}
+
+Essa ação não pode ser desfeita.`)) {
     const { error } = await sb.from("reparos").delete().eq("id", Number(b.dataset.apagar));
     if (error) return aviso(msgErro(error), true);
     if (repEdit === Number(b.dataset.apagar)) cancelarEdicaoReparo();
@@ -1531,10 +1608,17 @@ const recuperando = location.hash.includes("type=recovery") || sessionStorage.ge
 if (recuperando) { try { sessionStorage.setItem("recuperandoSenha", "1"); } catch {} }
 $("esqueci").addEventListener("click", async e => {
   e.preventDefault();
-  const email = $("email").value.trim() || prompt("Digite o seu e-mail:");
-  if (!email) return;
+  const er = $("erroLogin");
+  const email = $("email").value.trim();
+  if (!email) {
+    er.hidden = false;
+    er.style.color = "";
+    er.textContent = "Digite o seu e-mail acima e clique novamente em “Esqueci minha senha”.";
+    $("email").focus();
+    return;
+  }
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-  const er = $("erroLogin"); er.hidden = false; er.style.color = error ? "" : "var(--verde)";
+  er.hidden = false; er.style.color = error ? "" : "var(--verde)";
   er.textContent = error ? "Não foi possível enviar: " + error.message : "Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha.";
 });
 $("formSenha").addEventListener("submit", async e => {
