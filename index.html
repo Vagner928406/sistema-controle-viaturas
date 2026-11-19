@@ -414,6 +414,11 @@ function alertas(v) {
     if (d < 0) a.push(["v", `${nome} vencido há ${-d} dia(s)`]);
     else if (d <= LIMITE_DIAS) a.push(["p", d === 0 ? `${nome} vence hoje` : `${nome} em ${d} dia(s)`]);
   });
+  if (v.possui_termo_cessao && v.venc_termo_cessao) {
+    const d = dias(v.venc_termo_cessao);
+    if (d < 0) a.push(["v", `Termo de cessão vencido há ${-d} dia(s)`]);
+    else if (d <= 180) a.push(["p", `Termo de cessão vence em ${d} dia(s)`]);
+  }
   [["km_troca_oleo","Troca de óleo"],["km_filtro_oleo","Filtro de óleo"],["km_filtro_combustivel","Filtro de combustível"],["km_filtro_ar","Filtro de ar"]]
     .forEach(([c, nome]) => {
       if (v[c] == null || v.km == null) return;
