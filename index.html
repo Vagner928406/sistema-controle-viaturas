@@ -517,6 +517,11 @@ function montarCampos() {
   });
   $("campos").innerHTML = html;
   $("f_status").addEventListener("change", ajustarRotulosEmp);
+  $("f_possui_termo_cessao").addEventListener("change", () => ajustarValidadeTermo("f"));
+}
+function ajustarValidadeTermo(prefixo) {
+  const possui = $(`${prefixo}_possui_termo_cessao`).value === "true";
+  $(`${prefixo}_venc_termo_cessao`).parentElement.hidden = !possui;
 }
 function ajustarRotulosEmp() {
   const st = $("f_status").value, curso = st === "Curso/Operação";
@@ -530,6 +535,7 @@ function abrirForm(v) {
   CAMPOS.forEach(([c]) => { const el = $("f_" + c); el.value = v?.[c] ?? (c === "status" ? "Disponível" : c === "km" ? 0 : ""); if (el.classList.contains("milhar") && el.value !== "") el.value = Number(el.value).toLocaleString("pt-BR"); el.disabled = !admin; });
   $("formRodape").children[0].hidden = !admin;
   ajustarRotulosEmp();
+  ajustarValidadeTermo("f");
   $("dlgForm").showModal();
 }
 
@@ -1001,6 +1007,7 @@ function abrirDados(v) {
       : v[c] ?? "";
     el.disabled = !admin;
   });
+  ajustarValidadeTermo("d");
   $("dadosSalvar").hidden = !admin;
   listarDocs();
   $("dlgDados").showModal();
@@ -1564,6 +1571,7 @@ $("camposDados").innerHTML = TECNICOS.map(([c, rot, tipo]) => {
     : tipo === "number" ? 'min="0" step="1" inputmode="numeric"' : "";
   return `<div><label for="d_${c}">${rot}</label><input id="d_${c}" type="${inputType}" ${atributos}${c === "chassi" ? ' style="text-transform:uppercase"' : ""}></div>`;
 }).join("");
+$("d_possui_termo_cessao").addEventListener("change", () => ajustarValidadeTermo("d"));
 sb.auth.getSession().then(({ data }) => { if (data.session && !recuperando) return entrar(); })
   .catch(e => { const er = $("erroLogin"); er.textContent = e.message || "Não foi possível restaurar a sessão."; er.hidden = false; });
 </script>
