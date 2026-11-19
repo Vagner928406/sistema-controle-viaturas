@@ -89,8 +89,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 .assinatura{text-align:center;padding:16px 12px 20px;color:#5b6877;font-size:13px}
 @media(max-width:600px){main{padding:12px}header h1{font-size:16px}}
 </style>
-<!-- Dica de segurança: em produção, adicione o atributo integrity="sha384-..." correspondente a esta versão do bundle -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
 
@@ -353,8 +352,7 @@ const DECIMAIS = ["valor_aquisicao"];
 const STATUS = ["Disponível","Manutenção","Emprestada","Curso/Operação","Baixada"];
 const emprestado = st => st === "Emprestada" || st === "Curso/Operação";
 const rotResp = st => st === "Curso/Operação" ? "Guarnição" : "Responsável";
-const linhasTxt = t => esc(t).replace(/?
-/g, "<br>");
+const linhasTxt = t => esc(t).replace(/\r?\n/g, "<br>");
 const limparEmprestimoAtivo = o => Object.assign(o, {
   resp_emprestimo: null,
   destino_emprestimo: null,
@@ -370,7 +368,7 @@ const fmtData = d => d ? d.split("-").reverse().join("/") : "-";
 const brl = x => Number(x).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDecimal = v => v == null ? "" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hojeLocalISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[̀-ͯ]/g, "");
+const norm = s => String(s ?? "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 function parseDecimal(val) {
   const limpo = String(val ?? "").trim().replace(/R\$/i, "").replace(/\s/g, "");
@@ -676,16 +674,10 @@ async function excluir(v) {
   const [m, r, emp] = await Promise.all([cont("manutencoes"), cont("reparos"), cont("emprestimos")]);
   const qm = m.count ?? 0, qr = r.count ?? 0, qe = emp.count ?? 0;
   const msg = (m.error || r.error || emp.error)
-    ? `Não foi possível conferir todo o histórico da viatura ${v.prefixo} / ${v.placa}. Ela pode ter manutenções, reparos e empréstimos que serão apagados junto.
-
-Essa ação não pode ser desfeita.`
+    ? `Não foi possível conferir todo o histórico da viatura ${v.prefixo} / ${v.placa}. Ela pode ter manutenções, reparos e empréstimos que serão apagados junto.\n\nEssa ação não pode ser desfeita.`
     : qm + qr + qe > 0
-      ? `ATENÇÃO: a viatura ${v.prefixo} / ${v.placa} tem ${qm} manutenção(ões), ${qr} reparo(s) e ${qe} empréstimo(s) registrados.
-
-Excluir apaga a viatura e todo esse histórico permanentemente.`
-      : `Excluir a viatura ${v.prefixo} / ${v.placa}?
-
-Essa ação não pode ser desfeita.`;
+      ? `ATENÇÃO: a viatura ${v.prefixo} / ${v.placa} tem ${qm} manutenção(ões), ${qr} reparo(s) e ${qe} empréstimo(s) registrados.\n\nExcluir apaga a viatura e todo esse histórico permanentemente.`
+      : `Excluir a viatura ${v.prefixo} / ${v.placa}?\n\nEssa ação não pode ser desfeita.`;
   excluindoViatura = v;
   $("excluirMsg").textContent = msg;
   $("excluirPrefAlvo").textContent = v.prefixo;
@@ -796,7 +788,7 @@ function marcarPorDescricao() {
   marcar("oleo", /[oó]leo/.test(t));
   marcar("filtro_oleo", /filtro.*[oó]leo|[oó]leo.*filtro/.test(t));
   marcar("filtro_comb", /combust/.test(t));
-  marcar("filtro_ar", /filtro.*ar|ar.*filtro/.test(t));
+  marcar("filtro_ar", /filtro.*\bar\b|\bar\b.*filtro/.test(t));
 }
 
 async function listarHist() {
@@ -883,11 +875,7 @@ $("histLista").addEventListener("click", async e => {
   }
   const id = e.target.dataset.del; if (!id) return;
   const reg = histRows.find(x => x.id === Number(id));
-  if (!confirm(`Excluir esta manutenção?
-
-${reg ? fmtData(reg.data) + " - " + reg.descricao : ""}
-
-Essa ação não pode ser desfeita.`)) return;
+  if (!confirm(`Excluir esta manutenção?\n\n${reg ? fmtData(reg.data) + " - " + reg.descricao : ""}\n\nEssa ação não pode ser desfeita.`)) return;
   const { error } = await sb.from("manutencoes").delete().eq("id", id);
   if (error) return aviso(msgErro(error), true);
   if (Number(id) === histEdit) sairEdicaoHist();
@@ -901,8 +889,7 @@ $("btnCsv").onclick = () => {
   const fmtVal = (v, c) => typeof v[c] === "boolean" ? (v[c] ? "Sim" : "Não")
     : DECIMAIS.includes(c) && v[c] != null ? String(v[c]).replace(".", ",")
     : v[c];
-  const csv = "﻿" + [cab, ...filtradas().map(v => cols.map(c => fmtVal(v, c)))].map(l => l.map(cel).join(";")).join("
-");
+  const csv = "\uFEFF" + [cab, ...filtradas().map(v => cols.map(c => fmtVal(v, c)))].map(l => l.map(cel).join(";")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   a.download = `viaturas-${hojeLocalISO()}.csv`; a.click(); URL.revokeObjectURL(a.href);
@@ -966,11 +953,7 @@ $("empRes").addEventListener("click", async e => {
   if (b.hasAttribute("data-emp-cancelar")) { empEditId = null; return renderEmp(); }
   if (b.dataset.empDel) {
     const reg = empRows.find(x => String(x.id) === b.dataset.empDel);
-    if (!confirm(`Excluir este empréstimo?
-
-${reg ? (reg.destino || "-") + " - " + (reg.responsavel || "-") + " (" + fmtData(reg.data_saida) + ")" : ""}
-
-Essa ação não pode ser desfeita.`)) return;
+    if (!confirm(`Excluir este empréstimo?\n\n${reg ? (reg.destino || "-") + " - " + (reg.responsavel || "-") + " (" + fmtData(reg.data_saida) + ")" : ""}\n\nEssa ação não pode ser desfeita.`)) return;
     const { data, error } = await sb.from("emprestimos").delete().eq("id", b.dataset.empDel).select();
     if (error) return aviso(msgErro(error), true);
     if (!data || !data.length) return aviso("Não foi possível excluir: sem permissão no banco (veja a política de exclusão da tabela emprestimos).", true);
@@ -1274,8 +1257,7 @@ $("rCsv").onclick = async () => {
     const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const linhas = [["Viatura", "Placa", "Veículo", "Data", "KM", "Serviço", "Oficina", "Valor"]];
     r.grupos.forEach(g => g.regs.forEach(x => linhas.push([g.v.prefixo, g.v.placa, `${g.v.marca ?? ""} ${g.v.modelo ?? ""}`.trim(), fmtData(x.data), x.km, x.descricao, x.oficina, x.valor == null ? "" : String(x.valor).replace(".", ",")])));
-    const csv = "﻿" + linhas.map(l => l.map(cel).join(";")).join("
-");
+    const csv = "\uFEFF" + linhas.map(l => l.map(cel).join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const nome = r.vid ? r.grupos[0].v.prefixo : "geral";
@@ -1327,7 +1309,7 @@ $("docArq").addEventListener("change", async e => {
   let falhou = false;
   for (const f of e.target.files) {
     if (f.size > 10 * 1024 * 1024) { aviso(`${f.name}: maior que 10 MB.`, true); falhou = true; continue; }
-    const nome = f.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w.-]+/g, "_");
+    const nome = f.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "_");
     const { error } = await sb.storage.from(BUCKET).upload(`viatura_${dadosId}/${Date.now()}_${nome}`, f);
     if (error) { aviso(msgErro(error), true); falhou = true; break; }
   }
@@ -1341,11 +1323,7 @@ $("docsLista").addEventListener("click", async e => {
     const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(`viatura_${dadosId}/${b.dataset.abrir}`, 300);
     if (error || !data?.signedUrl) { w?.close(); return aviso(msgErro(error || "Não foi possível abrir o arquivo."), true); }
     if (w) w.location.href = data.signedUrl; else aviso("O navegador bloqueou a janela. Permita pop-ups e tente de novo.", true);
-  } else if (b.dataset.apagar && confirm(`Excluir este arquivo?
-
-${b.dataset.apagar.replace(/^\d+_/, "")}
-
-Essa ação não pode ser desfeita.`)) {
+  } else if (b.dataset.apagar && confirm(`Excluir este arquivo?\n\n${b.dataset.apagar.replace(/^\d+_/, "")}\n\nEssa ação não pode ser desfeita.`)) {
     const { error } = await sb.storage.from(BUCKET).remove([`viatura_${dadosId}/${b.dataset.apagar}`]);
     if (error) return aviso(msgErro(error), true);
     await listarDocs();
@@ -1422,8 +1400,7 @@ async function listarReparos() {
   const dt = x => new Date(x).toLocaleDateString("pt-BR");
   const prazo = r => r.prazo ? `<br><small${dias(r.prazo) < 0 ? ' style="color:var(--verm);font-weight:700"' : ""}>Prazo: ${fmtData(r.prazo)}${dias(r.prazo) < 0 ? " (atrasado)" : ""}</small>` : "";
   const solucao = r => r.observacao_solucao
-    ? `<br><small>Solução:<br>${esc(r.observacao_solucao).replace(/
-/g, "<br>")}</small>` : "";
+    ? `<br><small>Solução:<br>${esc(r.observacao_solucao).replace(/\n/g, "<br>")}</small>` : "";
   $("repLista").innerHTML = (pend.length
     ? `<table style="min-width:0"><tbody>${pend.map(r => `<tr><td>${r.prioridade === "Urgente" ? '<span class="chip v">Urgente</span> ' : ""}${esc(r.descricao)}${prazo(r)}${solucao(r)}<br><small>Registrado em ${dt(r.criado_em)}</small></td>
       <td class="acoes">${admin ? `<button class="sec" data-editar="${r.id}">Editar</button> <button class="ok" data-concluir="${r.id}">Concluir</button> <button class="perigo" data-apagar="${r.id}">Excluir</button>` : ""}</td></tr>`).join("")}</tbody></table>`
@@ -1485,11 +1462,7 @@ $("repLista").addEventListener("click", async e => {
     const { error } = await sb.from("reparos").update({ concluido: true, concluido_em: new Date().toISOString() }).eq("id", Number(b.dataset.concluir));
     if (error) return aviso(msgErro(error), true);
     await recarregarReparos(); aviso("Reparo concluído.");
-  } else if (b.dataset.apagar && confirm(`Excluir este reparo?
-
-${repRows.find(x => x.id === Number(b.dataset.apagar))?.descricao || ""}
-
-Essa ação não pode ser desfeita.`)) {
+  } else if (b.dataset.apagar && confirm(`Excluir este reparo?\n\n${repRows.find(x => x.id === Number(b.dataset.apagar))?.descricao || ""}\n\nEssa ação não pode ser desfeita.`)) {
     const { error } = await sb.from("reparos").delete().eq("id", Number(b.dataset.apagar));
     if (error) return aviso(msgErro(error), true);
     if (repEdit === Number(b.dataset.apagar)) cancelarEdicaoReparo();
