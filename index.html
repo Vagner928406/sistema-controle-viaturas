@@ -301,6 +301,17 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
           <canvas id="grafViaturas"></canvas>
       </div>
 
+      <div>
+          <h3>Custos por Fonte de Recurso</h3>
+          <canvas id="grafFonte"></canvas>
+          <div id="rankingFonte"></div>
+      </div>
+
+      <div>
+          <h3>Custos por Emprego</h3>
+          <canvas id="grafEmprego"></canvas>
+      </div>
+
   </div>
 </dialog>
 
@@ -1176,7 +1187,7 @@ document.querySelector("thead").addEventListener("click", e => {
 // ---------- Custos ----------
 let graficosCustos = [];
 let graficosDashboard = [];
-let chartStatus = null, chartCustos = null, chartViaturas = null;
+let chartStatus = null, chartCustos = null, chartViaturas = null, chartFonte = null, chartEmprego = null;
 
 function destruirGraficosCustos() {
   graficosCustos.forEach(grafico => grafico.destroy());
@@ -1197,6 +1208,14 @@ function destruirGraficosDashboard() {
   if (chartViaturas) {
     chartViaturas.destroy();
     chartViaturas = null;
+  }
+  if (chartFonte) {
+    chartFonte.destroy();
+    chartFonte = null;
+  }
+  if (chartEmprego) {
+    chartEmprego.destroy();
+    chartEmprego = null;
   }
 }
 
@@ -1244,7 +1263,7 @@ async function buscarManutencoesDashboard(de = "", ate = "") {
 
   let data = [], offset = 0;
   for (;;) {
-    let q = sb.from("manutencoes").select("data,valor,viatura_id").in("viatura_id", ids).order("id").range(offset, offset + 999);
+    let q = sb.from("manutencoes").select("data,valor,viatura_id,fonte_recurso").in("viatura_id", ids).order("id").range(offset, offset + 999);
     if (de) q = q.gte("data", de);
     if (ate) q = q.lte("data", ate);
     const r = await q;
@@ -1289,19 +1308,36 @@ async function gerarGraficoStatus() {
     return;
   }
   definirEstadoGrafico("grafStatus", true, "");
+  const grupos = {
+    "Disponível": base.filter(v => v.status === "Disponível"),
+    "Manutenção": base.filter(v => v.status === "Manutenção"),
+    "Emprestada": base.filter(v => v.status === "Emprestada"),
+    "Curso/Operação": base.filter(v => v.status === "Curso/Operação"),
+    "Baixada": base.filter(v => v.status === "Baixada")
+  };
+  const labels = Object.keys(grupos);
   chartStatus = new Chart($("grafStatus"), {
     type: "pie",
     data: {
-      labels: ["Disponível", "Manutenção", "Emprestada", "Curso/Operação", "Baixada"],
+      labels,
       datasets: [{
-        data: [
-          base.filter(v => v.status === "Disponível").length,
-          base.filter(v => v.status === "Manutenção").length,
-          base.filter(v => v.status === "Emprestada").length,
-          base.filter(v => v.status === "Curso/Operação").length,
-          base.filter(v => v.status === "Baixada").length
-        ]
+        data: labels.map(status => grupos[status].length)
       }]
+    },
+    options: {
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label(context) {
+              return `${context.label}: ${context.parsed}`;
+            },
+            afterLabel(context) {
+              const lista = grupos[context.label] || [];
+              return lista.map(v => v.prefixo).join("\n");
+            }
+          }
+        }
+      }
     }
   });
 }
@@ -1411,6 +1447,107 @@ async function gerarGraficoViaturas(manutencoes = null) {
   });
 }
 
+async function gerarGraficoFonte(manutencoes = []) {
+  if (chartFonte) chartFonte.destroy();
+  chartFonte = null;
+  if (!window.Chart) throw new Error("Não foi possível carregar a biblioteca Chart.js.");
+
+  const porFonte = new Map();
+  manutencoes.forEach(r => {
+    const fonte = r.fonte_recurso || "Não informado";
+    porFonte.set(fonte, (porFonte.get(fonte) || 0) + (Number(r.valor) || 0));
+  });
+
+  const dados = [...porFonte.entries()].sort((a, b) => b[1] - a[1]);
+  if (!dados.length) {
+    definirEstadoGrafico("grafFonte", false, "Nenhum custo encontrado.");
+    $("rankingFonte").innerHTML = "";
+    return;
+  }
+
+  definirEstadoGrafico("grafFonte", true, "");
+  $("rankingFonte").innerHTML = `<div class="hist"><table style="min-width:0">
+    <thead><tr><th>#</th><th>Fonte</th><th>Total</th></tr></thead>
+    <tbody>${dados.map(([fonte, total], index) =>
+      `<tr><td>${index + 1}</td><td>${esc(fonte)}</td><td>${brl(total)}</td></tr>`
+    ).join("")}</tbody>
+  </table></div>`;
+  chartFonte = new Chart($("grafFonte"), {
+    type: "doughnut",
+    data: {
+      labels: dados.map(([fonte]) => fonte),
+      datasets: [{
+        data: dados.map(([, total]) => total),
+        backgroundColor: ["#14507f", "#1f8a4c", "#f2b53a", "#c62f3b", "#7d5ba6", "#5b6877", "#1a62b8"]
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: {
+          callbacks: {
+            label: contexto => `${contexto.label}: ${brl(contexto.parsed)}`
+          }
+        }
+      }
+    }
+  });
+}
+
+async function gerarGraficoEmprego(manutencoes = []) {
+  if (chartEmprego) chartEmprego.destroy();
+  chartEmprego = null;
+  if (!window.Chart) throw new Error("Não foi possível carregar a biblioteca Chart.js.");
+
+  const viaturasPorId = new Map(
+    dashboardFrotaFiltrada().map(v => [String(v.id), v])
+  );
+  const custos = new Map();
+  manutencoes.forEach(m => {
+    const viatura = viaturasPorId.get(String(m.viatura_id));
+    if (!viatura) return;
+    const emprego = viatura.emprego || "Não informado";
+    custos.set(emprego, (custos.get(emprego) || 0) + (Number(m.valor) || 0));
+  });
+
+  const dados = [...custos.entries()].sort((a, b) => b[1] - a[1]);
+  if (!dados.length) {
+    definirEstadoGrafico("grafEmprego", false, "Nenhum dado encontrado.");
+    return;
+  }
+
+  definirEstadoGrafico("grafEmprego", true, "");
+  chartEmprego = new Chart($("grafEmprego"), {
+    type: "bar",
+    data: {
+      labels: dados.map(([emprego]) => emprego),
+      datasets: [{
+        label: "Custos",
+        data: dados.map(([, total]) => total),
+        backgroundColor: "#14507f",
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: valor => brl(valor) }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: contexto => brl(contexto.parsed.y)
+          }
+        }
+      }
+    }
+  });
+}
+
 let dashboardInicializado = false;
 
 function definirPeriodoRapidoDashboard() {
@@ -1466,6 +1603,8 @@ async function abrirDashboard() {
     await gerarGraficoStatus();
     const manutencoes = await gerarGraficoCustos();
     await gerarGraficoViaturas(manutencoes);
+    await gerarGraficoFonte(manutencoes);
+    await gerarGraficoEmprego(manutencoes);
   } catch (e) {
     destruirGraficosDashboard();
     aviso(msgErro(e), true);
@@ -1597,7 +1736,7 @@ async function gerarCustos() {
     </p>
       <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
       <h3>Custos por fonte de recurso</h3>
-      <div class="graficoCustos"><canvas id="grafFonte"></canvas></div>
+      <div class="graficoCustos"><canvas id="grafFonteCustos"></canvas></div>
       <div class="hist"><table style="min-width:0"><thead><tr><th>Fonte de recurso</th><th>Valor</th></tr></thead>
       <tbody>${tabelaFontes || '<tr><td colspan="2">Sem registros no período.</td></tr>'}</tbody></table></div>
       <h3>Custo por mês</h3>
@@ -1605,7 +1744,7 @@ async function gerarCustos() {
       <h3>Viaturas com maior custo</h3>
       <div class="graficoCustos"><canvas id="grafViatura"></canvas></div>
       <h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
-    criarGraficoCustos("grafFonte", fonteLabels, fonteValores, "Custos por fonte");
+    criarGraficoCustos("grafFonteCustos", fonteLabels, fonteValores, "Custos por fonte");
     criarGraficoCustos("grafMes", mesLabels, mesValores, "Custos por mês");
     criarGraficoCustos("grafViatura", viaturaLabels, viaturaValores, "Custos por viatura");
   } finally { finalizar(); }
