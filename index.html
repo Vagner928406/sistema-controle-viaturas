@@ -87,9 +87,14 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
 @keyframes girar{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.spinner{animation:none;border-top-color:var(--verde)}}
 .assinatura{text-align:center;padding:16px 12px 20px;color:#5b6877;font-size:13px}
+.graficoCustos{height:280px;margin:8px 0 18px}
+.resumoCard{background:#fff;border-radius:10px;padding:15px;text-align:center;border:1px solid #d5dbe3}
+.resumoCard b{font-size:32px;color:#14507f;display:block}
+.graficoVazio{text-align:center;color:#5b6877;padding:24px}
 @media(max-width:600px){main{padding:12px}header h1{font-size:16px}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -113,6 +118,7 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <button class="sec" id="btnAtualizar" title="Recarregar os dados">Atualizar</button>
   <button class="sec" id="btnPend">Pendências</button>
   <button class="sec" id="btnCustos">Custos</button>
+  <button class="sec" id="btnDashboard">Dashboard</button>
   <button class="sec" id="btnRel">Relatórios</button>
   <button class="sec so-admin" id="btnLog" hidden>Alterações</button>
   <button class="sec so-admin" id="btnUsr" hidden>Usuários</button>
@@ -210,6 +216,92 @@ dialog h2{margin:0 0 4px;color:var(--azul);font-size:18px}
   <div class="grade"><div><label for="cDe">De</label><input type="date" id="cDe"></div><div><label for="cAte">Até</label><input type="date" id="cAte"></div></div>
   <div class="rodape"><button type="button" id="cGerar">Atualizar</button></div>
   <div id="custosRes"></div>
+</dialog>
+
+<dialog id="dlgDashboard" style="width:min(1400px,95vw)">
+  <div class="cab">
+    <h2>Dashboard Gerencial</h2>
+    <button type="button"
+            class="sec"
+            data-fechar>
+      Fechar
+    </button>
+  </div>
+
+  <div class="grade">
+    <div>
+      <label for="dashRapido">Período rápido</label>
+      <select id="dashRapido">
+        <option value="7">Últimos 7 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="365" selected>Últimos 12 meses</option>
+        <option value="">Personalizado</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="dashDe">Período inicial</label>
+      <input type="date" id="dashDe">
+    </div>
+
+    <div>
+      <label for="dashAte">Período final</label>
+      <input type="date" id="dashAte">
+    </div>
+
+    <div>
+      <label for="dashStatus">Status</label>
+      <select id="dashStatus">
+        <option value="">Todos</option>
+        <option>Disponível</option>
+        <option>Manutenção</option>
+        <option>Emprestada</option>
+        <option>Curso/Operação</option>
+        <option>Baixada</option>
+      </select>
+    </div>
+
+    <div style="align-self:end">
+      <button type="button" id="btnAtualizarDashboard">Atualizar</button>
+    </div>
+
+    <div style="align-self:end">
+      <button type="button" class="sec" id="btnLimparDashboard">Limpar filtros</button>
+    </div>
+  </div>
+
+  <div id="cardsDashboard"
+       style="
+       display:grid;
+       grid-template-columns:
+       repeat(auto-fit,minmax(220px,1fr));
+       gap:12px;
+       margin-bottom:20px">
+  </div>
+
+  <div style="
+       display:grid;
+       grid-template-columns:
+       repeat(auto-fit,minmax(450px,1fr));
+       gap:20px">
+
+      <div>
+          <h3>Status da Frota</h3>
+          <canvas id="grafStatus"></canvas>
+      </div>
+
+      <div>
+          <h3>Custos por Mês</h3>
+          <canvas id="grafCustos"></canvas>
+      </div>
+
+      <div>
+          <h3>Top Gastos por Viatura</h3>
+          <canvas id="grafViaturas"></canvas>
+      </div>
+
+  </div>
 </dialog>
 
 <dialog id="dlgLog" style="width:min(980px,calc(100% - 24px))">
@@ -1082,6 +1174,344 @@ document.querySelector("thead").addEventListener("click", e => {
 });
 
 // ---------- Custos ----------
+let graficosCustos = [];
+let graficosDashboard = [];
+let chartStatus = null, chartCustos = null, chartViaturas = null;
+
+function destruirGraficosCustos() {
+  graficosCustos.forEach(grafico => grafico.destroy());
+  graficosCustos = [];
+}
+
+function destruirGraficosDashboard() {
+  graficosDashboard.forEach(grafico => grafico.destroy());
+  graficosDashboard = [];
+  if (chartStatus) {
+    chartStatus.destroy();
+    chartStatus = null;
+  }
+  if (chartCustos) {
+    chartCustos.destroy();
+    chartCustos = null;
+  }
+  if (chartViaturas) {
+    chartViaturas.destroy();
+    chartViaturas = null;
+  }
+}
+
+function criarGraficoDashboard(id, tipo, labels, valores, titulo) {
+  if (!window.Chart) throw new Error("Não foi possível carregar a biblioteca Chart.js.");
+  graficosDashboard.push(new Chart($(id), {
+    type: tipo,
+    data: {
+      labels,
+      datasets: [{
+        label: titulo,
+        data: valores,
+        backgroundColor: tipo === "doughnut"
+          ? ["#14507f", "#1f8a4c", "#f2b53a", "#c62f3b", "#7d5ba6", "#5b6877"]
+          : "#14507f",
+        borderRadius: tipo === "bar" ? 4 : 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: tipo === "doughnut", position: "bottom" },
+        tooltip: {
+          callbacks: {
+            label: contexto => `${contexto.label ? contexto.label + ": " : ""}${brl(contexto.parsed.y ?? contexto.parsed)}`
+          }
+        }
+      },
+      ...(tipo === "bar" ? {
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: valor => brl(valor) }
+          }
+        }
+      } : {})
+    }
+  }));
+}
+
+async function buscarManutencoesDashboard(de = "", ate = "") {
+  const ids = dashboardIdsFiltrados();
+  if (!ids.length) return [];
+
+  let data = [], offset = 0;
+  for (;;) {
+    let q = sb.from("manutencoes").select("data,valor,viatura_id").in("viatura_id", ids).order("id").range(offset, offset + 999);
+    if (de) q = q.gte("data", de);
+    if (ate) q = q.lte("data", ate);
+    const r = await q;
+    if (r.error) throw r.error;
+    data = data.concat(r.data);
+    if (r.data.length < 1000) return data;
+    offset += 1000;
+  }
+}
+
+function dashboardFrotaFiltrada() {
+  const status = $("dashStatus").value;
+  return frota.filter(v => !status || v.status === status);
+}
+
+function dashboardIdsFiltrados() {
+  return dashboardFrotaFiltrada().map(v => v.id);
+}
+
+function definirEstadoGrafico(id, temDados, mensagem) {
+  const canvas = $(id);
+  if (!canvas) throw new Error(`O gráfico ${id} não foi encontrado.`);
+  let vazio = $(`${id}Vazio`);
+  if (!vazio) {
+    vazio = document.createElement("p");
+    vazio.id = `${id}Vazio`;
+    vazio.className = "graficoVazio";
+    canvas.insertAdjacentElement("afterend", vazio);
+  }
+  vazio.textContent = mensagem;
+  vazio.hidden = temDados;
+  canvas.hidden = !temDados;
+}
+
+async function gerarGraficoStatus() {
+  if (chartStatus) chartStatus.destroy();
+  chartStatus = null;
+  if (!window.Chart) throw new Error("Não foi possível carregar a biblioteca Chart.js.");
+  const base = dashboardFrotaFiltrada();
+  if (!base.length) {
+    definirEstadoGrafico("grafStatus", false, "Nenhuma viatura encontrada.");
+    return;
+  }
+  definirEstadoGrafico("grafStatus", true, "");
+  chartStatus = new Chart($("grafStatus"), {
+    type: "pie",
+    data: {
+      labels: ["Disponível", "Manutenção", "Emprestada", "Curso/Operação", "Baixada"],
+      datasets: [{
+        data: [
+          base.filter(v => v.status === "Disponível").length,
+          base.filter(v => v.status === "Manutenção").length,
+          base.filter(v => v.status === "Emprestada").length,
+          base.filter(v => v.status === "Curso/Operação").length,
+          base.filter(v => v.status === "Baixada").length
+        ]
+      }]
+    }
+  });
+}
+
+async function gerarGraficoCustos() {
+  if (chartCustos) chartCustos.destroy();
+  chartCustos = null;
+  if (!window.Chart) throw new Error("Não foi possível carregar a biblioteca Chart.js.");
+  const de = $("dashDe").value;
+  const ate = $("dashAte").value;
+  const manutencoes = await buscarManutencoesDashboard(de, ate);
+  if (!manutencoes.length) {
+    definirEstadoGrafico("grafCustos", false, "Nenhuma manutenção encontrada no período.");
+    return manutencoes;
+  }
+  definirEstadoGrafico("grafCustos", true, "");
+  const porMes = new Map();
+  manutencoes.forEach(r => {
+    if (!r.data) return;
+    const mes = r.data.slice(0, 7);
+    porMes.set(mes, (porMes.get(mes) || 0) + (Number(r.valor) || 0));
+  });
+  const meses = [...porMes.entries()].sort(([a], [b]) => a.localeCompare(b));
+  chartCustos = new Chart($("grafCustos"), {
+    type: "bar",
+    data: {
+      labels: meses.map(([mes]) => mes),
+      datasets: [{
+        label: "Custos",
+        data: meses.map(([, total]) => total)
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: valor => brl(valor) }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: contexto => brl(contexto.parsed.y)
+          }
+        }
+      }
+    }
+  });
+  return manutencoes;
+}
+
+async function gerarGraficoViaturas(manutencoes = null) {
+  if (chartViaturas) chartViaturas.destroy();
+  chartViaturas = null;
+  if (!window.Chart) throw new Error("Não foi possível carregar a biblioteca Chart.js.");
+  const de = $("dashDe").value;
+  const ate = $("dashAte").value;
+  if (!manutencoes) manutencoes = await buscarManutencoesDashboard(de, ate);
+  const idsFiltrados = new Set(dashboardIdsFiltrados().map(String));
+  manutencoes = manutencoes.filter(r =>
+    idsFiltrados.has(String(r.viatura_id))
+    && (!de || r.data >= de)
+    && (!ate || r.data <= ate)
+  );
+  if (!manutencoes.length) {
+    definirEstadoGrafico("grafViaturas", false, "Nenhuma manutenção encontrada no período.");
+    return;
+  }
+  definirEstadoGrafico("grafViaturas", true, "");
+  const porViatura = new Map();
+  manutencoes.forEach(r => {
+    const id = String(r.viatura_id);
+    porViatura.set(id, (porViatura.get(id) || 0) + (Number(r.valor) || 0));
+  });
+  const top = [...porViatura.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const labels = top.map(([id]) => {
+    const v = frota.find(item => String(item.id) === id);
+    return v?.prefixo || id;
+  });
+  const valores = top.map(([, total]) => total);
+  chartViaturas = new Chart($("grafViaturas"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Custos",
+        data: valores
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: valor => brl(valor) }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: contexto => brl(contexto.parsed.y)
+          }
+        }
+      }
+    }
+  });
+}
+
+let dashboardInicializado = false;
+
+function definirPeriodoRapidoDashboard() {
+  const dias = Number($("dashRapido").value);
+  if (!Number.isInteger(dias) || dias <= 0) return false;
+
+  const ate = new Date();
+  const de = new Date(ate);
+  de.setDate(de.getDate() - dias + 1);
+  const dataISO = data => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+  $("dashDe").value = dataISO(de);
+  $("dashAte").value = hojeLocalISO();
+  return true;
+}
+
+async function abrirDashboard() {
+  if (!dashboardInicializado) {
+    if (!$("dashDe").value && !$("dashAte").value) {
+      if (!definirPeriodoRapidoDashboard()) {
+        $("dashDe").value = `${new Date().getFullYear()}-01-01`;
+        $("dashAte").value = hojeLocalISO();
+      }
+    } else {
+      if (!$("dashDe").value) $("dashDe").value = `${new Date().getFullYear()}-01-01`;
+      if (!$("dashAte").value) $("dashAte").value = hojeLocalISO();
+    }
+    dashboardInicializado = true;
+  }
+  if (!$("dlgDashboard").open) $("dlgDashboard").showModal();
+  const finalizar = mostrarCarregamento("Carregando dashboard...");
+  try {
+    destruirGraficosDashboard();
+    const cards = {};
+    const frotaFiltrada = dashboardFrotaFiltrada();
+    const idsFrotaFiltrada = new Set(frotaFiltrada.map(v => String(v.id)));
+    cards.total = frotaFiltrada.length;
+    cards.disponiveis = frotaFiltrada.filter(v => v.status === "Disponível").length;
+    cards.manutencao = frotaFiltrada.filter(v => v.status === "Manutenção").length;
+    cards.emprestadas = frotaFiltrada.filter(v => v.status === "Emprestada").length;
+    cards.reparos = reparos.filter(r => idsFrotaFiltrada.has(String(r.viatura_id))).length;
+    cards.alertas = frotaFiltrada.filter(v => alertas(v).length).length;
+
+    const disponibilidade = cards.total > 0 ? (cards.disponiveis / cards.total) * 100 : 0;
+    $("cardsDashboard").innerHTML = `
+      <div class="resumoCard"><b>${cards.total}</b><div>Total de Viaturas</div></div>
+      <div class="resumoCard"><b>${disponibilidade.toFixed(1)}%</b><div>Disponibilidade</div></div>
+      <div class="resumoCard"><b>${cards.manutencao}</b><div>Em Manutenção</div></div>
+      <div class="resumoCard"><b>${cards.emprestadas}</b><div>Emprestadas</div></div>
+      <div class="resumoCard"><b>${cards.reparos}</b><div>Reparos Pendentes</div></div>
+      <div class="resumoCard"><b>${cards.alertas}</b><div>Alertas Ativos</div></div>
+    `;
+
+    await gerarGraficoStatus();
+    const manutencoes = await gerarGraficoCustos();
+    await gerarGraficoViaturas(manutencoes);
+  } catch (e) {
+    destruirGraficosDashboard();
+    aviso(msgErro(e), true);
+  } finally {
+    finalizar();
+  }
+}
+
+function criarGraficoCustos(id, labels, valores, titulo) {
+  if (!window.Chart) return;
+  const canvas = $(id);
+  if (!canvas) return;
+  graficosCustos.push(new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: titulo,
+        data: valores,
+        backgroundColor: "#14507f",
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: contexto => brl(contexto.parsed.y)
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: valor => brl(valor)
+          }
+        }
+      }
+    }
+  }));
+}
+
 async function abrirCustos() {
   $("cDe").value = `${new Date().getFullYear()}-01-01`; $("cAte").value = hojeLocalISO();
   $("dlgCustos").showModal(); await gerarCustos();
@@ -1089,6 +1519,7 @@ async function abrirCustos() {
 async function gerarCustos() {
   const finalizar = mostrarCarregamento("Calculando custos...");
   try {
+    destruirGraficosCustos();
     let data = [], de = 0;
     for (;;) {
       let q = sb.from("manutencoes").select("viatura_id,data,valor,fonte_recurso").order("id").range(de, de + 999);
@@ -1144,6 +1575,16 @@ async function gerarCustos() {
         <td>${brl(valor)}</td>
       </tr>
     `).join("");
+    const fonteLabels = topFontes.map(([fonte]) => fonte);
+    const fonteValores = topFontes.map(([, valor]) => valor);
+    const meses = Object.entries(porM).sort();
+    const mesLabels = meses.map(([mes]) => mes.split("-").reverse().join("/"));
+    const mesValores = meses.map(([, valor]) => valor);
+    const viaturaLabels = topV.map(([id]) => {
+      const v = frota.find(f => f.id === Number(id));
+      return v ? v.prefixo : "Viatura " + id;
+    });
+    const viaturaValores = topV.map(([, valor]) => valor);
     $("custosRes").innerHTML = `<p style="font-weight:700">
       ${data.length} serviço(s) · total ${brl(total)}
     </p>
@@ -1156,13 +1597,35 @@ async function gerarCustos() {
     </p>
       <div class="hist"><table><thead><tr><th>Viatura</th><th>Serviços</th><th>Custo</th></tr></thead><tbody>${lv || '<tr><td colspan="3">Sem registros no período.</td></tr>'}</tbody></table></div>
       <h3>Custos por fonte de recurso</h3>
-      ${barras(topFontes, f => f)}
+      <div class="graficoCustos"><canvas id="grafFonte"></canvas></div>
       <div class="hist"><table style="min-width:0"><thead><tr><th>Fonte de recurso</th><th>Valor</th></tr></thead>
       <tbody>${tabelaFontes || '<tr><td colspan="2">Sem registros no período.</td></tr>'}</tbody></table></div>
-      <h3>Custo por mês</h3>${barras(Object.entries(porM).sort(), k => k.split("-").reverse().join("/"))}<h3>Viaturas com maior custo</h3>${barras(topV, id => { const v = frota.find(f => f.id === Number(id)); return v ? v.prefixo : "Viatura " + id; })}<h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
+      <h3>Custo por mês</h3>
+      <div class="graficoCustos"><canvas id="grafMes"></canvas></div>
+      <h3>Viaturas com maior custo</h3>
+      <div class="graficoCustos"><canvas id="grafViatura"></canvas></div>
+      <h3>Por mês</h3><div class="hist"><table style="min-width:0"><thead><tr><th>Mês</th><th>Custo</th></tr></thead><tbody>${lm || '<tr><td colspan="2">-</td></tr>'}</tbody></table></div>`;
+    criarGraficoCustos("grafFonte", fonteLabels, fonteValores, "Custos por fonte");
+    criarGraficoCustos("grafMes", mesLabels, mesValores, "Custos por mês");
+    criarGraficoCustos("grafViatura", viaturaLabels, viaturaValores, "Custos por viatura");
   } finally { finalizar(); }
 }
 $("btnCustos").onclick = abrirCustos;
+$("btnDashboard").onclick = abrirDashboard;
+$("btnAtualizarDashboard").onclick = abrirDashboard;
+$("btnLimparDashboard").onclick = () => {
+  $("dashDe").value = "";
+  $("dashAte").value = "";
+  $("dashStatus").value = "";
+  $("dashRapido").value = "";
+  abrirDashboard();
+};
+["dashDe", "dashAte", "dashStatus"].forEach(id => {
+  $(id).addEventListener("change", abrirDashboard);
+});
+$("dashRapido").addEventListener("change", () => {
+  if (definirPeriodoRapidoDashboard()) abrirDashboard();
+});
 $("cGerar").onclick = gerarCustos;
 
 // ---------- Ficha para impressão / PDF ----------
@@ -1634,3 +2097,4 @@ sb.auth.getSession().then(({ data }) => { if (data.session && !recuperando) retu
 </script>
 </body>
 </html>
+
