@@ -1969,14 +1969,49 @@ async function abrirUsuarios() {
     if (error) return aviso(msgErro(error), true);
     $("usrRes").innerHTML = `<table style="min-width:0"><thead><tr><th>E-mail</th><th>Último acesso</th><th>Perfil</th></tr></thead><tbody>${data.map(u =>
       `<tr><td>${esc(u.email)}</td><td>${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString("pt-BR") : "nunca"}</td>
-       <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${u.perfil ? "" : '<option value="" selected disabled>Sem acesso</option>'}${["admin", "operador", "consulta"].map(p =>
-         `<option value="${p}"${p === u.perfil ? " selected" : ""}>${{ admin: "Administrador", operador: "Atualiza KM", consulta: "Consulta" }[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
+       <td><select class="perfsel" data-id="${esc(u.id)}" aria-label="Perfil de ${esc(u.email)}">${u.perfil ? "" : '<option value="" selected disabled>Sem acesso</option>'}${["admin", "operador", "consulta", "bloqueado"].map(p =>
+         `<option value="${p}"${p === u.perfil ? " selected" : ""}>${{ admin: "Administrador", operador: "Atualiza KM", consulta: "Consulta", bloqueado: "Bloqueado" }[p]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
   } finally { finalizar(); }
 }
 $("usrRes").addEventListener("change", async e => {
   const el = e.target.closest(".perfsel"); if (!el) return;
+  if (!admin) return aviso("Apenas administradores podem alterar perfis.", true);
+
+  const { data: { user }, error: erroUsuario } = await sb.auth.getUser();
+  if (erroUsuario || !user) {
+    aviso(erroUsuario ? msgErro(erroUsuario) : "Não foi possível confirmar o usuário atual.", true);
+    return abrirUsuarios();
+  }
+  const { data: usuarios, error: erroLista } = await sb.rpc("listar_usuarios");
+  if (erroLista) {
+    aviso(msgErro(erroLista), true);
+    return abrirUsuarios();
+  }
+  const alvo = usuarios.find(u => String(u.id) === String(el.dataset.id));
+  const administradores = usuarios.filter(u => u.perfil === "admin");
+  if (alvo?.perfil === "admin" && administradores.length === 1 && el.value !== "admin") {
+    aviso("Não é possível remover ou bloquear o último administrador do sistema.", true);
+    return abrirUsuarios();
+  }
+
   const { error } = await sb.rpc("definir_perfil", { uid: el.dataset.id, novo: el.value });
   if (error) { aviso(msgErro(error), true); return abrirUsuarios(); }
+  if (String(user.id) === String(el.dataset.id) && el.value !== "admin") {
+    const { error: erroSaida } = await sb.auth.signOut();
+    if (erroSaida) {
+      admin = false;
+      podeKm = false;
+      document.querySelectorAll(".so-admin").forEach(item => item.hidden = true);
+      $("btnKm").hidden = true;
+      $("app").hidden = true;
+      $("login").hidden = false;
+      $("erroLogin").textContent = "Seu perfil foi atualizado, mas não foi possível encerrar a sessão. Recarregue a página para aplicar as novas permissões.";
+      $("erroLogin").hidden = false;
+      return;
+    }
+    location.reload();
+    return;
+  }
   aviso("Perfil atualizado.");
 });
 $("btnUsr").onclick = abrirUsuarios;
@@ -2152,6 +2187,16 @@ async function entrar() {
   const { data, error: errPerfil } = await sb.from("usuarios_perfis").select("perfil").eq("id", user.id).maybeSingle();
   if (errPerfil) throw new Error("Falha de conexão ao verificar seu perfil. Tente de novo.");
   if (!data?.perfil) { await sb.auth.signOut(); throw new Error("Seu usuário ainda não foi liberado por um administrador."); }
+  if (data.perfil === "bloqueado") {
+    const { error } = await sb.auth.signOut();
+    if (error) throw new Error("Seu usuário está bloqueado, mas não foi possível encerrar a sessão. Feche o navegador e contate um administrador.");
+    throw new Error("Usuário bloqueado pelo administrador.");
+  }
+  if (!["admin", "operador", "consulta"].includes(data.perfil)) {
+    const { error } = await sb.auth.signOut();
+    if (error) throw new Error("Perfil inválido e não foi possível encerrar a sessão. Contate um administrador.");
+    throw new Error("Perfil de usuário inválido. Contate um administrador.");
+  }
   admin = data?.perfil === "admin";
   podeKm = admin || data?.perfil === "operador";
   $("perfilTxt").textContent = admin ? "· Administrador" : data?.perfil === "operador" ? "· Atualiza KM" : "· Consulta";
@@ -2174,6 +2219,7 @@ $("login").addEventListener("submit", async e => {
     const m = e?.message || String(e);
     erro.textContent = /invalid login/i.test(m) ? "E-mail ou senha incorretos."
       : /confirm/i.test(m) ? "E-mail ainda não confirmado no Supabase."
+      : /usuário bloqueado/i.test(m) ? m
       : "Não foi possível entrar: " + m;
     erro.hidden = false;
   }
