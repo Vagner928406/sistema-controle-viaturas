@@ -1974,44 +1974,56 @@ async function abrirUsuarios() {
   } finally { finalizar(); }
 }
 $("usrRes").addEventListener("change", async e => {
-  const el = e.target.closest(".perfsel"); if (!el) return;
-  if (!admin) return aviso("Apenas administradores podem alterar perfis.", true);
+  const el = e.target.closest(".perfsel");
+  if (!el) return;
 
-  const { data: { user }, error: erroUsuario } = await sb.auth.getUser();
-  if (erroUsuario || !user) {
-    aviso(erroUsuario ? msgErro(erroUsuario) : "Não foi possível confirmar o usuário atual.", true);
-    return abrirUsuarios();
-  }
-  const { data: usuarios, error: erroLista } = await sb.rpc("listar_usuarios");
+  const novoPerfil = el.value;
+  const usuarioId = el.dataset.id;
+
+  const { data: usuarios, error: erroLista } =
+    await sb.rpc("listar_usuarios");
+
   if (erroLista) {
     aviso(msgErro(erroLista), true);
     return abrirUsuarios();
   }
-  const alvo = usuarios.find(u => String(u.id) === String(el.dataset.id));
-  const administradores = usuarios.filter(u => u.perfil === "admin");
-  if (alvo?.perfil === "admin" && administradores.length === 1 && el.value !== "admin") {
-    aviso("Não é possível remover ou bloquear o último administrador do sistema.", true);
+
+  const usuario =
+    usuarios.find(
+      u => String(u.id) === String(usuarioId)
+    );
+
+  const administradores =
+    usuarios.filter(
+      u => u.perfil === "admin"
+    );
+
+  const ultimoAdministrador =
+    usuario?.perfil === "admin" &&
+    administradores.length === 1 &&
+    novoPerfil !== "admin";
+
+  if (ultimoAdministrador) {
+    aviso(
+      "Não é permitido bloquear ou alterar o último administrador do sistema.",
+      true
+    );
+
+    el.value = "admin";
+    return;
+  }
+
+  const { error } =
+    await sb.rpc("definir_perfil", {
+      uid: usuarioId,
+      novo: novoPerfil
+    });
+
+  if (error) {
+    aviso(msgErro(error), true);
     return abrirUsuarios();
   }
 
-  const { error } = await sb.rpc("definir_perfil", { uid: el.dataset.id, novo: el.value });
-  if (error) { aviso(msgErro(error), true); return abrirUsuarios(); }
-  if (String(user.id) === String(el.dataset.id) && el.value !== "admin") {
-    const { error: erroSaida } = await sb.auth.signOut();
-    if (erroSaida) {
-      admin = false;
-      podeKm = false;
-      document.querySelectorAll(".so-admin").forEach(item => item.hidden = true);
-      $("btnKm").hidden = true;
-      $("app").hidden = true;
-      $("login").hidden = false;
-      $("erroLogin").textContent = "Seu perfil foi atualizado, mas não foi possível encerrar a sessão. Recarregue a página para aplicar as novas permissões.";
-      $("erroLogin").hidden = false;
-      return;
-    }
-    location.reload();
-    return;
-  }
   aviso("Perfil atualizado.");
 });
 $("btnUsr").onclick = abrirUsuarios;
